@@ -1,9 +1,16 @@
+
+
 use bollard::Docker;
+use bollard::errors::Error as DockerError;
 use bollard::query_parameters::ListImagesOptionsBuilder;
 
+pub async fn connect_docker () -> Result<Docker, DockerError> {
+    let docker_client = Docker::connect_with_local_defaults()?;
 
-pub async fn docker_version (){
-    let docker = Docker::connect_with_local_defaults().unwrap();
+    Ok(docker_client)
+}
+
+pub async fn docker_version (docker: &Docker){
 
     match docker.version().await{
         Ok (v) => println!("La version de docker es: {:?}", v),
@@ -11,8 +18,7 @@ pub async fn docker_version (){
     }
 }
 
-pub async fn docker_images (){
-    let docker = Docker::connect_with_local_defaults().unwrap();
+pub async fn docker_images (docker: &Docker){
 
     let options = ListImagesOptionsBuilder::default()
         .all(true)

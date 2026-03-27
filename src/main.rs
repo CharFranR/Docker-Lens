@@ -6,9 +6,24 @@ async fn main () {
 
     println!("La prueba doctor\n");
 
-    docker::docker_version().await;
+    // Primeros nos conectamos a docker
 
-    docker::docker_images().await;
+    let client = match docker::connect_docker().await{
+        Ok(c) => {
+            print!("Conexión exitosa");
+            c
+        },
+        
+        Err(e) => {
+            print!("No se ha podido encontrar un contenedor docker activo {}", e);
+            return;
+        } 
+    };
+
+
+    docker::docker_version(&client).await;
+
+    docker::docker_images(&client).await;
 
 
     println!("\nPrueba purrungueada");
