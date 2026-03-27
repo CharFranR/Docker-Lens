@@ -29,7 +29,7 @@ async fn main () {
 
     let file_path: String = String::from(r"");
 
-    docker::list_files(&file_path).await;
+    // docker::list_files(&file_path).await;
 
 
     let orchestor_path: PathBuf = match docker::find_container_orchestrator(&file_path).await{

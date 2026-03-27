@@ -50,18 +50,17 @@ pub async  fn list_files (file_path: &String) -> std::io::Result<()>{
 
 pub fn file_is_here(file_path: &str, target: &str) -> bool {
     let path = Path::new(file_path);
-    let full_path = path.join(target);
     path.join(target).exists()
 }
 
 pub fn find_ochestor_folder(file_path: &str) -> std::io::Result<PathBuf> {
 
-    let target = "docker-compose.yml";
+    let target = ".git";
     let mut contador = 0;
     let mut current_dir = PathBuf::from(file_path);
 
     loop {
-        if file_is_here(current_dir.to_str().unwrap(), ".git") {
+        if file_is_here(current_dir.to_str().unwrap(), target) {
             return Ok(current_dir);
         }
 
@@ -112,7 +111,6 @@ pub async fn find_container_orchestrator (file_path: &String) -> std::io::Result
     .filter_map(|e| e.ok()) {
 
         if entry.file_name() == target {
-            println!("Archivo encontrado en la ruta: {:?}", entry.path());
             return Ok(entry.path().to_path_buf());
         }
     }
