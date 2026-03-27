@@ -1,7 +1,9 @@
 use bollard::Docker;
 use bollard::errors::Error as DockerError;
 use bollard::query_parameters::ListImagesOptionsBuilder;
-
+use walkdir::WalkDir;
+use std::path::PathBuf;
+use std::io::{Error, ErrorKind};
 use std::fs;
 
 pub async fn connect_docker () -> Result<Docker, DockerError> {
@@ -42,4 +44,19 @@ pub async  fn list_files (file_path: &String) -> std::io::Result<()>{
         }
     }
     Ok(())
+}
+
+pub async fn find_container_orchestrator (file_path: &String) -> std::io::Result<(PathBuf)>{
+
+    let target = "docker-compose.yml";
+
+    for entry in WalkDir::new(file_path)
+    .into_iter()
+    .filter_map(|e| e.ok()) {
+        if entry.file_name() == target {
+            println!("Archivo encontrado en la ruta: {:?}", entry.path());
+            return Ok(entry.path().to_path_buf());
+        }
+    }
+    Err(Error::new(ErrorKind::NotFound, "No se encontró el archivo docker-compose.yml"))
 }

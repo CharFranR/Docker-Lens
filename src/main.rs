@@ -1,5 +1,5 @@
 use std::string;
-
+use std::path::PathBuf;
 mod docker;
 
 #[tokio::main]
@@ -12,12 +12,12 @@ async fn main () {
 
     let client = match docker::connect_docker().await{
         Ok(c) => {
-            print!("Conexión exitosa");
+            println!("Conexión exitosa");
             c
         },
         
         Err(e) => {
-            print!("No se ha podido encontrar un contenedor docker activo {}", e);
+            println!("No se ha podido encontrar un contenedor docker activo {}", e);
             return;
         } 
     };
@@ -30,6 +30,20 @@ async fn main () {
     let file_path: String = String::from(r"C:\Users\oscar\Documents\Biogestor");
 
     docker::list_files(&file_path).await;
+
+
+    let orchestor_path: PathBuf = match docker::find_container_orchestrator(&file_path).await{
+        Ok (C) => {
+            println!("Orquestador encontrado");
+            C
+        },
+        Err (e) => {
+            println!("No ha sido posible encontrar el orquestador");
+            return;
+        }
+    };
+
+    
     
     
     println!("\nPrueba purrungueada");
