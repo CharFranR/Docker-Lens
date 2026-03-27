@@ -27,7 +27,7 @@ async fn main () {
 
     // docker::docker_images(&client).await;
 
-    let file_path: String = String::from(r"C:\Users\oscar\Documents\Biogestor");
+    let file_path: String = String::from(r"");
 
     docker::list_files(&file_path).await;
 
@@ -35,6 +35,7 @@ async fn main () {
     let orchestor_path: PathBuf = match docker::find_container_orchestrator(&file_path).await{
         Ok (C) => {
             println!("Orquestador encontrado");
+            println!("Ruta: {:?}", C);
             C
         },
         Err (e) => {

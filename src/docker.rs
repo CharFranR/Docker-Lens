@@ -51,7 +51,7 @@ pub async  fn list_files (file_path: &String) -> std::io::Result<()>{
 pub fn file_is_here(file_path: &str, target: &str) -> bool {
     let path = Path::new(file_path);
     let full_path = path.join(target);
-    full_path.exists() && full_path.is_file()
+    path.join(target).exists()
 }
 
 pub fn find_ochestor_folder(file_path: &str) -> std::io::Result<PathBuf> {
