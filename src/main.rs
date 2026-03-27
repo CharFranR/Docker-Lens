@@ -32,7 +32,7 @@ async fn main () {
     // docker::list_files(&file_path).await;
 
 
-    let orchestor_path: PathBuf = match docker::find_container_orchestrator(&file_path).await{
+    let orchestrator_path: PathBuf = match docker::find_container_orchestrator(&file_path).await{
         Ok (C) => {
             println!("Orquestador encontrado");
             println!("Ruta: {:?}", C);
