@@ -2,7 +2,7 @@ use pyo3::prelude::*;
 
 /// A Python module implemented in Rust.
 #[pymodule]
-mod Docker_Lens {
+mod docker_lens {
     use pyo3::prelude::*;
 
     /// Formats the sum of two numbers as string.
