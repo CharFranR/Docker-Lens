@@ -1,8 +1,8 @@
-
-
 use bollard::Docker;
 use bollard::errors::Error as DockerError;
 use bollard::query_parameters::ListImagesOptionsBuilder;
+
+use std::fs;
 
 pub async fn connect_docker () -> Result<Docker, DockerError> {
     let docker_client = Docker::connect_with_local_defaults()?;
@@ -29,4 +29,17 @@ pub async fn docker_images (docker: &Docker){
     for image in images {
         println!("-> {:?}", image);
     }
+}
+
+pub async  fn list_files (file_path: &String) -> std::io::Result<()>{
+
+    for entry in fs::read_dir(file_path)?{
+        let entry = entry?;
+        let path = entry.path();
+
+        if path.is_file(){
+            println!("Archivo: {:?}", path.file_name().unwrap());
+        }
+    }
+    Ok(())
 }

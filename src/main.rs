@@ -1,3 +1,5 @@
+use std::string;
+
 mod docker;
 
 #[tokio::main]
@@ -21,10 +23,14 @@ async fn main () {
     };
 
 
-    docker::docker_version(&client).await;
+    // docker::docker_version(&client).await;
 
-    docker::docker_images(&client).await;
+    // docker::docker_images(&client).await;
 
+    let file_path: String = String::from(r"C:\Users\oscar\Documents\Biogestor");
 
+    docker::list_files(&file_path).await;
+    
+    
     println!("\nPrueba purrungueada");
 }
