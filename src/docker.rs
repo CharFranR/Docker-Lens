@@ -7,6 +7,23 @@ use std::path::{self, PathBuf};
 use std::path::Path;
 use std::io::{Error, ErrorKind, empty};
 use std::fs;
+use serde::Deserialize;
+use std::collections::HashMap;
+
+#[derive(Debug, Deserialize)]
+pub struct DockerCompose {
+    pub services: HashMap<String, Service>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct Service {
+    pub container_name: Option<String>,
+    pub image: Option<String>,
+    pub ports: Option<Vec<String>>,
+    pub volumes: Option<Vec<String>>,
+    pub environment: Option<serde_yaml::Value>,
+    pub depends_on: Option<serde_yaml::Value>, // Usamos Value porque puede ser lista o mapa
+}
 
 pub async fn connect_docker () -> Result<Docker, DockerError> {
     let docker_client = Docker::connect_with_local_defaults()?;
@@ -118,3 +135,32 @@ pub async fn find_container_orchestrator (file_path: &String) -> std::io::Result
     // 6. Si no encuentra el orquestador, el orquestador es inaccesible.
     Err(Error::new(ErrorKind::NotFound, "No fue posible encontrar el orquestador"))
 }
+
+
+// Serializer docker
+
+fn serializer_docker(docker_compose_text: String) -> Result<DockerCompose, Error> {
+    let compose_data: DockerCompose = serde_yaml::from_str(&docker_compose_text)
+    .map_err(|e| Error::new(ErrorKind::InvalidData, format!("Error en el YAML: {}", e)))?;
+    
+    Ok(compose_data)
+}
+
+// Buscar servicio db y extraer data
+
+pub async fn extract_db_data (folder_path: &PathBuf) -> std::io::Result<(DockerCompose)>{
+    
+    let orchestrator_path = folder_path.join("docker-compose.yml");
+    let docker_compose_text = fs::read_to_string(orchestrator_path)?;
+
+    let docker_data = serializer_docker(docker_compose_text)?;
+
+    if let Some(db_service) = docker_data.services.get("db"){
+        println!("{:?}", db_service);
+    };
+
+
+    
+    Ok(docker_data)
+}
+    

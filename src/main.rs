@@ -27,7 +27,7 @@ async fn main () {
 
     // docker::docker_images(&client).await;
 
-    let file_path: String = String::from(r"");
+    let file_path: String = String::from(r"C:\Users\oscar\Documents\Biogestor");
 
     // docker::list_files(&file_path).await;
 
@@ -44,6 +44,12 @@ async fn main () {
         }
     };
 
+    // Leer el archivo
+    let file_data = docker::extract_db_data(&orchestrator_path).await;
+
+
+    
+    
     
     
     
