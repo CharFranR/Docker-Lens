@@ -1,14 +1,30 @@
 use bollard::Docker;
 use bollard::errors::Error as DockerError;
 use bollard::query_parameters::ListImagesOptionsBuilder;
+use pyo3::sync::with_critical_section;
 use walkdir::WalkDir;
-use std::collections::btree_map::Entry;
+use std::collections::btree_map::{Entry, Range};
 use std::path::{self, PathBuf};
 use std::path::Path;
 use std::io::{Error, ErrorKind, empty};
 use std::fs;
-use serde::Deserialize;
+use std::slice::ArrayWindows;
+use serde::{Deserialize, ser};
 use std::collections::HashMap;
+
+// Public lists for heuristics
+pub const NAME_LIST: &[&str] = &[
+    "db", "database", "postgres", "postgresql", "pg", "pgsql", "postgres_db",
+    "postgres-database", "postgres_service", "postgres-server", "postgresdb", "db-server",
+    "db_postgres", "database_postgres", "main_db", "primary_db", "data", "data_db",
+    "storage_db", "storage", "dbs", "database_service", "sql_db", "sql_database",
+    "pg-master", "pg-replica", "database-main", "db-main", "primary-database",
+] as &[&str];
+
+pub const IMAGE_LIST: &[&str] = &[
+    "postgres", "postgis", "postgresql", "timescaledb", "timescale", "bitnami/postgresql",
+] as &[&str];
+
 
 #[derive(Debug, Deserialize)]
 pub struct DockerCompose {
@@ -98,7 +114,7 @@ pub fn find_ochestor_folder(file_path: &str) -> std::io::Result<PathBuf> {
     Err(Error::new(ErrorKind::NotFound, "No se encontró la carpeta raiz"))
 }
 
-pub async fn find_container_orchestrator (file_path: &String) -> std::io::Result<(PathBuf)>{
+pub async fn find_container_orchestrator (file_path: &String) -> std::io::Result<PathBuf>{
 
     // Pasos para encontrar el orquestador 
     let target = "docker-compose.yml";
@@ -146,21 +162,116 @@ fn serializer_docker(docker_compose_text: String) -> Result<DockerCompose, Error
     Ok(compose_data)
 }
 
-// Buscar servicio db y extraer data
 
-pub async fn extract_db_data (folder_path: &PathBuf) -> std::io::Result<(DockerCompose)>{
-    
+// New Feature: No es viable solo busca el servicio db, hay que implementar una cierta
+// heuristica para encontrar el servicio de db independientemente del nombre
+
+
+pub fn find_db_service (folder_path: &PathBuf) -> std::io::Result<String> {
+
     let orchestrator_path = folder_path.join("docker-compose.yml");
     let docker_compose_text = fs::read_to_string(orchestrator_path)?;
 
     let docker_data = serializer_docker(docker_compose_text)?;
 
-    if let Some(db_service) = docker_data.services.get("db"){
-        println!("{:?}", db_service);
-    };
+    // Crear diccionario de servicios y puntos
+    let mut servicios: HashMap<String, i32> = HashMap::new();
 
 
+    for (name, service) in &docker_data.services {
+        servicios.insert(name.clone(),0);
+    }
     
-    Ok(docker_data)
+
+
+    for (name, score) in servicios.iter_mut() {
+
+        // 2.2 Puntos por nombre de servicio 
+        if NAME_LIST.iter().any(|alias| name.eq_ignore_ascii_case(alias)) {
+            *score += 10;
+        }
+
+        // Consultamos la definición del servicio en el compose
+        if let Some(svc) = docker_data.services.get(name) {
+
+            // 2.3 Puntos por (no tener) depends
+            if svc.depends_on.is_none() {
+                *score += 20;
+            }
+
+            // 2.4 Puntos por la image
+            if let Some(img) = &svc.image {
+                let img_norm = img.to_ascii_lowercase();
+                if IMAGE_LIST.iter().any(|w| img_norm.contains(w)) {
+                    *score += 30;
+                } else if img_norm.contains("postgres") || img_norm.contains("postgis") {
+                    *score += 10;
+                }
+            }
+
+            // 2.5 Punts por puerto
+            if let Some(ports_vec) = &svc.ports {
+                for p in ports_vec {
+                    let p_clean = p.split('/').next().unwrap_or(p);
+                    let parts: Vec<&str> = p_clean.split(':').collect();
+                    if parts.len() == 2 && parts[1] == "5432" {
+                        *score += 25;
+                        break;
+                    } else if parts.len() == 3 && parts[2] == "5432" {
+                        *score += 25;
+                        break;
+                    }
+                }
+            }
+
+            // 2.6 Environment evidence (POSTGRES_*)
+            if let Some(env_value) = &svc.environment {
+                if let Some(map) = env_value.as_mapping() {
+                    if map.get(&serde_yaml::Value::String("POSTGRES_DB".into())).is_some() {
+                        *score += 20;
+                    }
+                    if map.get(&serde_yaml::Value::String("POSTGRES_USER".into())).is_some() {
+                        *score += 15;
+                    }
+                    if map.get(&serde_yaml::Value::String("POSTGRES_PASSWORD".into())).is_some() {
+                        *score += 15;
+                    }
+                } else if let Some(seq) = env_value.as_sequence() {
+                    for item in seq {
+                        if let Some(s) = item.as_str() {
+                            if s.starts_with("POSTGRES_DB=") {
+                                *score += 20;
+                            } else if s.starts_with("POSTGRES_USER=") {
+                                *score += 15;
+                            } else if s.starts_with("POSTGRES_PASSWORD=") {
+                                *score += 15;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+
+
+    // Identificar servicio con más puntos
+    let mut max_score = 0;
+    let mut service_winner: Option<String> = None;
+
+    for (name, score) in servicios.iter() {
+        if *score > max_score {
+            max_score = *score;
+            service_winner = Some(name.clone());
+        }
+    }
+
+    match service_winner {
+        Some(winner) => Ok(winner),
+        None => Err(Error::new(ErrorKind::NotFound, "No se encontró un servicio de base de datos")),
+    }
+    
+    
+
 }
     

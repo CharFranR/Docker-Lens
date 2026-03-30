@@ -27,7 +27,7 @@ async fn main () {
 
     // docker::docker_images(&client).await;
 
-    let file_path: String = String::from(r"C:\Users\oscar\Documents\Biogestor");
+    let file_path: String = String::from(r"/home/frandev/Documentos/Proyecto-Asignatura-Web/");
 
     // docker::list_files(&file_path).await;
 
@@ -44,14 +44,16 @@ async fn main () {
         }
     };
 
-    // Leer el archivo
-    let file_data = docker::extract_db_data(&orchestrator_path).await;
-
-
-    
-    
-    
-    
+    // Leer el archivo y encontrar servicio de BD
+    match docker::find_db_service(&orchestrator_path) {
+        Ok(service_name) => {
+            println!("Servicio de BD encontrado: {}", service_name);
+            
+        }
+        Err(e) => {
+            println!("Error al encontrar servicio de BD: {}", e);
+        }
+    }
     
     println!("\nPrueba purrungueada");
 }
