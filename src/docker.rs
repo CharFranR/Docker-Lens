@@ -279,15 +279,6 @@ pub fn find_db_service (folder_path: &PathBuf) -> std::io::Result<DB_Data> {
         }
     }
 
-    // LLamamos la funcion para ver las specs del del serice_winner
-
-    let temp_winner = service_winner.clone();
-
-    println!("Este: {:?}",temp_winner);
-
-    get_db_container_ip(&temp_winner.unwrap().as_str());
-
-
     // Aislar el servicio ganador
 
 
@@ -356,10 +347,16 @@ pub fn find_db_service (folder_path: &PathBuf) -> std::io::Result<DB_Data> {
 
 
 pub fn get_db_container_ip(service_winner: &str) -> Option<String> {
-    let output = Command::new("docker")
+    let output = match Command::new("docker")
         .args(["ps", "-a", "--format", "{{.ID}}|{{.Names}}"])
         .output()
-        .expect("Failed to execute docker");
+    {
+        Ok(o) => o,
+        Err(_) => {
+            eprintln!("Error: Docker is not installed or not in PATH.");
+            return None;
+        }
+    };
     
     let output_str = String::from_utf8_lossy(&output.stdout);
     
@@ -371,14 +368,18 @@ pub fn get_db_container_ip(service_winner: &str) -> Option<String> {
             let name_clean = container_name.trim_start_matches('/');
             
             if name_clean.contains(service_winner) || container_name.contains(service_winner) {
-                let inspect_output = Command::new("docker")
+                let inspect_output = match Command::new("docker")
                     .args(["inspect", container_id, "--format", "{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}"])
                     .output()
-                    .expect("Failed to inspect container");
+                {
+                    Ok(o) => o,
+                    Err(_) => {
+                        eprintln!("Error: Could not inspect container '{}'.", container_name);
+                        return None;
+                    }
+                };
                 
                 let ip = String::from_utf8_lossy(&inspect_output.stdout).trim().to_string();
-                eprintln!("IP: {}", ip);
-                
                 return Some(ip);
             }
         }

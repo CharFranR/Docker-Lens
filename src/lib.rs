@@ -58,7 +58,6 @@ mod docker_lens {
     
     #[pyfunction]
     fn get_tables_return(user: String, password: String, db: String, port: String) -> PyResult<String> {
-        // Ejecutar psql y retornar el resultado directamente
         use std::process::Command;
         
         let output = Command::new("psql")
@@ -72,7 +71,14 @@ mod docker_lens {
             ])
             .env("PGPASSWORD", &password)
             .output()
-            .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
+            .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(format!("psql not found: {}", e)))?;
+        
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            return Err(pyo3::exceptions::PyRuntimeError::new_err(
+                format!("psql failed: {}", stderr.trim())
+            ));
+        }
         
         Ok(String::from_utf8_lossy(&output.stdout).to_string())
     }
@@ -92,7 +98,14 @@ mod docker_lens {
             ])
             .env("PGPASSWORD", &password)
             .output()
-            .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
+            .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(format!("psql not found: {}", e)))?;
+        
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            return Err(pyo3::exceptions::PyRuntimeError::new_err(
+                format!("Query failed: {}", stderr.trim())
+            ));
+        }
         
         Ok(String::from_utf8_lossy(&output.stdout).to_string())
     }
