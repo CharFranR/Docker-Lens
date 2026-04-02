@@ -47,7 +47,7 @@ async fn main () {
     // Leer el archivo y encontrar servicio de BD
     match docker::find_db_service(&orchestrator_path) {
         Ok(service_name) => {
-            println!("Servicio de BD encontrado: {}", service_name);
+            println!("Servicio de BD encontrado: {:?}", service_name);
             
         }
         Err(e) => {

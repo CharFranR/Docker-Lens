@@ -11,6 +11,8 @@ use std::fs;
 use std::slice::ArrayWindows;
 use serde::{Deserialize, ser};
 use std::collections::HashMap;
+use bollard::query_parameters::ListContainersOptions;
+use bollard::query_parameters::ListContainersOptionsBuilder;
 
 // Public lists for heuristics
 pub const NAME_LIST: &[&str] = &[
@@ -24,6 +26,14 @@ pub const NAME_LIST: &[&str] = &[
 pub const IMAGE_LIST: &[&str] = &[
     "postgres", "postgis", "postgresql", "timescaledb", "timescale", "bitnami/postgresql",
 ] as &[&str];
+
+#[derive(Debug)]
+pub struct DB_Data {
+    pub port: String,
+    pub POSTGRES_USER: String,
+    pub POSTGRES_PASSWORD: String,
+    pub POSTGRES_DB: String
+}
 
 
 #[derive(Debug, Deserialize)]
@@ -167,7 +177,7 @@ fn serializer_docker(docker_compose_text: String) -> Result<DockerCompose, Error
 // heuristica para encontrar el servicio de db independientemente del nombre
 
 
-pub fn find_db_service (folder_path: &PathBuf) -> std::io::Result<String> {
+pub fn find_db_service (folder_path: &PathBuf) -> std::io::Result<DB_Data> {
 
     let orchestrator_path = folder_path.join("docker-compose.yml");
     let docker_compose_text = fs::read_to_string(orchestrator_path)?;
@@ -266,12 +276,74 @@ pub fn find_db_service (folder_path: &PathBuf) -> std::io::Result<String> {
         }
     }
 
-    match service_winner {
-        Some(winner) => Ok(winner),
-        None => Err(Error::new(ErrorKind::NotFound, "No se encontró un servicio de base de datos")),
+    // Aislar el servicio ganador
+
+
+    let service = match service_winner {
+        Some(winner) => docker_data.services.get(&winner).unwrap(),
+        None => return Err(Error::new(ErrorKind::NotFound, "No se encontró un servicio de base de datos")),
+    };
+
+    // Extaer datos del servicio ganador
+
+
+    let mut port_winner = String::from("5432");
+    let mut postgress_user_winner = String::from("postress");
+    let mut postgress_password_winner = String::from("postgress");
+    let mut postgress_db_winner = String::from("appdb");
+
+
+
+    if let Some(port_temp) = &service.ports {
+        port_winner = String::from(port_temp[0].split(':').last().unwrap_or("5432"));
     }
     
+    if let Some(env_temp) = &service.environment {
+
+        if let Some (map) = env_temp.as_mapping() {
+
+
+        if let Some(postgress_user) = map.get(&serde_yaml::Value::String("POSTGRES_USER".into())) {
+            if let Some(db_str) = postgress_user.as_str() {
+                postgress_user_winner = String::from(db_str);
+            }
+        }
+
+        if let Some(postgress_password) = map.get(&serde_yaml::Value::String("POSTGRES_PASSWORD".into())) {
+            if let Some(db_str) = postgress_password.as_str() {
+                postgress_password_winner = String::from(db_str);
+            }
+        }
+
+
+        if let Some(postgres_db) = map.get(&serde_yaml::Value::String("POSTGRES_DB".into())) {
+            if let Some(db_str) = postgres_db.as_str() {
+                postgress_db_winner = String::from(db_str);
+            }
+        }
+             
+        }
+    }
+
+
+    let credential = DB_Data{
+        port: String::from(port_winner),
+        POSTGRES_USER: String::from(postgress_user_winner),
+        POSTGRES_PASSWORD: String::from(postgress_password_winner),
+        POSTGRES_DB: String::from(postgress_db_winner)
+    };
     
 
+   Ok(credential)
+
 }
+
+// 1. Listar contenedores y filtrar por nombre
+pub async fn find_container_by_name(docker: &Docker, name: &str) -> Result<Container, DockerError> {
+    let containers = docker.list_containers(Some(ListContainersOptions {
+        all: true,
+        ..Default::default()
+    })).await?;
     
+    // Filtrar por nombre que coincida con el container_name del servicio
+}
