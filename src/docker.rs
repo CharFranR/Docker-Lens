@@ -13,6 +13,7 @@ use serde::{Deserialize, ser};
 use std::collections::HashMap;
 use bollard::query_parameters::ListContainersOptions;
 use bollard::query_parameters::ListContainersOptionsBuilder;
+use std::process::Command;
 
 // Public lists for heuristics
 pub const NAME_LIST: &[&str] = &[
@@ -276,6 +277,15 @@ pub fn find_db_service (folder_path: &PathBuf) -> std::io::Result<DB_Data> {
         }
     }
 
+    // LLamamos la funcion para ver las specs del del serice_winner
+
+    let temp_winner = service_winner.clone();
+
+    println!("Este: {:?}",temp_winner);
+
+    get_db_container_ip(&temp_winner.unwrap().as_str());
+
+
     // Aislar el servicio ganador
 
 
@@ -283,6 +293,10 @@ pub fn find_db_service (folder_path: &PathBuf) -> std::io::Result<DB_Data> {
         Some(winner) => docker_data.services.get(&winner).unwrap(),
         None => return Err(Error::new(ErrorKind::NotFound, "No se encontró un servicio de base de datos")),
     };
+
+
+
+
 
     // Extaer datos del servicio ganador
 
@@ -338,12 +352,35 @@ pub fn find_db_service (folder_path: &PathBuf) -> std::io::Result<DB_Data> {
 
 }
 
-// 1. Listar contenedores y filtrar por nombre
-pub async fn find_container_by_name(docker: &Docker, name: &str) -> Result<Container, DockerError> {
-    let containers = docker.list_containers(Some(ListContainersOptions {
-        all: true,
-        ..Default::default()
-    })).await?;
+
+pub fn get_db_container_ip(service_winner: &str) -> Option<String> {
+    let output = Command::new("docker")
+        .args(["ps", "-a", "--format", "{{.ID}}|{{.Names}}"])
+        .output()
+        .expect("Failed to execute docker");
     
-    // Filtrar por nombre que coincida con el container_name del servicio
+    let output_str = String::from_utf8_lossy(&output.stdout);
+    
+    for line in output_str.lines() {
+        let parts: Vec<&str> = line.split('|').collect();
+        if parts.len() >= 2 {
+            let container_id = parts[0];
+            let container_name = parts[1];
+            let name_clean = container_name.trim_start_matches('/');
+            
+            if name_clean.contains(service_winner) || container_name.contains(service_winner) {
+                let inspect_output = Command::new("docker")
+                    .args(["inspect", container_id, "--format", "{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}"])
+                    .output()
+                    .expect("Failed to inspect container");
+                
+                let ip = String::from_utf8_lossy(&inspect_output.stdout).trim().to_string();
+                eprintln!("IP: {}", ip);
+                
+                return Some(ip);
+            }
+        }
+    }
+    
+    None
 }
