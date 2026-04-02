@@ -2,7 +2,7 @@
 import docker_lens as _rust_module
 
 # Re-export las funciones
-from _rust_module import (
+from docker_lens import (
     find_orchestrator,
     find_db,
     get_tables,
