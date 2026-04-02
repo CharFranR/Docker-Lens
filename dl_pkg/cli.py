@@ -1,5 +1,7 @@
 """Docker-Lens CLI - Terminal interface for Docker-Lens."""
 import argparse
+import json
+import subprocess
 import sys
 
 import docker_lens
@@ -49,10 +51,13 @@ def cmd_find_db(args: argparse.Namespace) -> int:
         
         db = docker_lens.find_db(orchestrator)
         
-        print(f"Port:     {db['port']}")
-        print(f"User:     {db['POSTGRES_USER']}")
-        print(f"Password: {db['POSTGRES_PASSWORD']}")
-        print(f"DB Name:  {db['POSTGRES_DB']}")
+        if args.json:
+            print(json.dumps(db, indent=2))
+        else:
+            print(f"Port:     {db['port']}")
+            print(f"User:     {db['POSTGRES_USER']}")
+            print(f"Password: {db['POSTGRES_PASSWORD']}")
+            print(f"DB Name:  {db['POSTGRES_DB']}")
         
         return 0
     except FileNotFoundError as e:
@@ -76,8 +81,14 @@ def cmd_tables(args: argparse.Namespace) -> int:
     except RuntimeError as e:
         print(f"Error: {e}", file=sys.stderr)
         return 1
+    except subprocess.CalledProcessError as e:
+        print("Error: psql not found. Install PostgreSQL client tools.", file=sys.stderr)
+        return 1
+    except FileNotFoundError:
+        print("Error: psql not found. Install PostgreSQL client tools.", file=sys.stderr)
+        return 1
     except Exception as e:
-        # Catch subprocess errors (e.g., psql not installed)
+        # Catch other subprocess errors
         error_msg = str(e).lower()
         if 'psql' in error_msg or 'subprocess' in error_msg:
             print("Error: psql is required but not found. Please install PostgreSQL client.", file=sys.stderr)
@@ -99,8 +110,14 @@ def cmd_query(args: argparse.Namespace) -> int:
     except RuntimeError as e:
         print(f"Error: {e}", file=sys.stderr)
         return 1
+    except subprocess.CalledProcessError as e:
+        print("Error: psql not found. Install PostgreSQL client tools.", file=sys.stderr)
+        return 1
+    except FileNotFoundError:
+        print("Error: psql not found. Install PostgreSQL client tools.", file=sys.stderr)
+        return 1
     except Exception as e:
-        # Catch subprocess errors (e.g., psql not installed)
+        # Catch other subprocess errors
         error_msg = str(e).lower()
         if 'psql' in error_msg or 'subprocess' in error_msg:
             print("Error: psql is required but not found. Please install PostgreSQL client.", file=sys.stderr)
@@ -133,6 +150,11 @@ def main() -> None:
         nargs='?',
         default='.',
         help='Path to project directory (default: current directory)'
+    )
+    parser_find_db.add_argument(
+        '--json',
+        action='store_true',
+        help='Output credentials as JSON'
     )
     parser_find_db.set_defaults(func=cmd_find_db)
     
