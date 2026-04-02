@@ -13,4 +13,7 @@ classifiers = [
 dynamic = ["version"]
 
 [project.scripts]
-docker-lens = "dl_pkg.cli:main"
+docker-lens = "docker_lens.cli:main"
+
+[tool.maturin]
+python-source = "python"
