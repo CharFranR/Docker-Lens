@@ -1,5 +1,5 @@
 use std::string;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 mod docker;
 
 #[tokio::main]
@@ -32,7 +32,7 @@ async fn main () {
     // docker::list_files(&file_path).await;
 
 
-    let orchestrator_path: PathBuf = match docker::find_container_orchestrator(&file_path).await{
+    let orchestrator_path: PathBuf = match docker::find_container_orchestrator(Path::new(&file_path)){
         Ok (C) => {
             println!("Orquestador encontrado");
             println!("Ruta: {:?}", C);
@@ -45,15 +45,20 @@ async fn main () {
     };
 
     // Leer el archivo y encontrar servicio de BD
-    match docker::find_db_service(&orchestrator_path) {
+    let credentials = match docker::find_db_service(&orchestrator_path) {
         Ok(service_name) => {
             println!("Servicio de BD encontrado: {:?}", service_name);
+            service_name
             
         }
         Err(e) => {
             println!("Error al encontrar servicio de BD: {}", e);
+            return;
         }
-    }
-    
+    };
+
+
+    docker::list_tables(&credentials);
+
     println!("\nPrueba purrungueada");
 }

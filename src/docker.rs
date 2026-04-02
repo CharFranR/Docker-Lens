@@ -125,20 +125,22 @@ pub fn find_ochestor_folder(file_path: &str) -> std::io::Result<PathBuf> {
     Err(Error::new(ErrorKind::NotFound, "No se encontró la carpeta raiz"))
 }
 
-pub async fn find_container_orchestrator (file_path: &String) -> std::io::Result<PathBuf>{
+pub fn find_container_orchestrator (file_path: &Path) -> std::io::Result<PathBuf>{
 
     // Pasos para encontrar el orquestador 
     let target = "docker-compose.yml";
+    
+    let file_str = file_path.to_str().unwrap();
 
     // 1. Comprobar en la dirección de orígen.
-    if file_is_here(file_path, target) {
+    if file_is_here(file_str, target) {
         return Ok(PathBuf::from(file_path))
     }
 
 
     // 2. Si no se encuentra, realizar Upward Discovery hasta encontrar el .git.
 
-    let init_folder = find_ochestor_folder(file_path)?;
+    let init_folder = find_ochestor_folder(file_str)?;
 
 
     // 4. Si encuentra el .git comprobar en la dirección actual de búsqueda.
@@ -383,4 +385,31 @@ pub fn get_db_container_ip(service_winner: &str) -> Option<String> {
     }
     
     None
+}
+
+
+pub fn list_tables(credentials: &DB_Data) {
+    let port = String::from("-p") + &credentials.port;
+    let user = String::from("-U") + &credentials.POSTGRES_USER;
+    let password =  &credentials.POSTGRES_PASSWORD;
+    let db = String::from("-d") + &credentials.POSTGRES_DB;
+
+
+    let output = Command::new("psql")
+        .args([
+            "-hlocalhost",
+            port.as_str(),
+            user.as_str(),
+            db.as_str(),
+            "-c", "\\dt",
+            "-w"  // No pedir password
+        ])
+        .env("PGPASSWORD", password.as_str())
+        .output()
+        .expect("Failed to execute psql");
+    
+
+        println!("{}", String::from_utf8_lossy(&output.stdout));
+
+
 }
