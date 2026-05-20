@@ -155,9 +155,9 @@ services:
     ports:
       - "5432:5432"
     environment:
-      POSTGRES_DB: mi_base
-      POSTGRES_USER: admin
-      POSTGRES_PASSWORD: secret123
+      postgres_db: mi_base
+      postgres_user: admin
+      postgres_password: secret123
   web:
     image: node:20
     ports:
@@ -247,13 +247,13 @@ El caso clásico en docker-compose: `environment` y `depends_on`.
 ```yaml
 # Formato A: Mapa (key: value)
 environment:
-  POSTGRES_DB: mi_base
-  POSTGRES_USER: admin
+  postgres_db: mi_base
+  postgres_user: admin
 
 # Formato B: Lista (strings "KEY=VALUE")
 environment:
-  - POSTGRES_DB=mi_base
-  - POSTGRES_USER=admin
+  - postgres_db=mi_base
+  - postgres_user=admin
 ```
 
 **Ambos son válidos** según la especificación de Docker Compose. No podés modelarlo con un tipo fijo. Ahí es donde entra `serde_yaml::Value`.
@@ -311,7 +311,7 @@ Una vez que tenés un `Value`, necesitás sacar los datos reales. Serde te da m�
 
 ```rust
 // Si environment es un MAPA:
-// { POSTGRES_DB: "mi_base", POSTGRES_USER: "admin" }
+// { postgres_db: "mi_base", postgres_user: "admin" }
 
 let env_value: serde_yaml::Value = service.environment.unwrap();
 
@@ -320,7 +320,7 @@ env_value.as_sequence() // → None ❌
 env_value.as_str()      // → None ❌
 
 // Si environment es una LISTA:
-// ["POSTGRES_DB=mi_base", "POSTGRES_USER=admin"]
+// ["postgres_db=mi_base", "postgres_user=admin"]
 
 env_value.as_sequence() // → Some(Vec [ ... ]) ✅
 env_value.as_mapping()  // → None ❌
@@ -331,7 +331,7 @@ env_value.as_mapping()  // → None ❌
 ```rust
 if let Some(map) = env_value.as_mapping() {
     // Para buscar por clave, necesitás un Value como clave
-    let clave = serde_yaml::Value::String("POSTGRES_DB".into());
+    let clave = serde_yaml::Value::String("postgres_db".into());
     
     if let Some(valor) = map.get(&clave) {
         // valor es otro Value — hay que sacar el string
@@ -345,7 +345,7 @@ if let Some(map) = env_value.as_mapping() {
 ¿Ves las dos capas?
 
 ```
-map.get("POSTGRES_DB")   → Option<&Value>   (primera caja)
+map.get("postgres_db")   → Option<&Value>   (primera caja)
 valor.as_str()           → Option<&str>     (segunda caja)
 ```
 
@@ -553,15 +553,15 @@ En Docker-Lens, el campo `environment` de un servicio puede venir en dos formato
 ```yaml
 # Formato A: Mapa
 environment:
-  POSTGRES_DB: mi_base
-  POSTGRES_USER: admin
-  POSTGRES_PASSWORD: secret123
+  postgres_db: mi_base
+  postgres_user: admin
+  postgres_password: secret123
 
 # Formato B: Lista
 environment:
-  - POSTGRES_DB=mi_base
-  - POSTGRES_USER=admin
-  - POSTGRES_PASSWORD=secret123
+  - postgres_db=mi_base
+  - postgres_user=admin
+  - postgres_password=secret123
 ```
 
 Por eso en el struct usamos `serde_yaml::Value` en vez de un tipo fijo:
@@ -592,7 +592,7 @@ Capa 2: ¿el valor adentro es un string?
 if let Some(env) = &service.environment {           // Capa 0: abrir Option<Service.environment>
     if let Some(map) = env.as_mapping() {            // Capa 1: ¿es un mapa?
         if let Some(val) = map.get(                  // Capa 2a: buscar la clave
-            &serde_yaml::Value::String("POSTGRES_DB".into())
+            &serde_yaml::Value::String("postgres_db".into())
         ) {
             if let Some(db_str) = val.as_str() {     // Capa 2b: extraer el string
                 println!("DB: {}", db_str);
@@ -609,8 +609,8 @@ if let Some(env) = &service.environment {
     if let Some(seq) = env.as_sequence() {           // Capa 1: ¿es una lista?
         for item in seq {                             // iterar cada elemento
             if let Some(s) = item.as_str() {         // Capa 2: es un string?
-                if s.starts_with("POSTGRES_DB=") {
-                    let value = s.trim_start_matches("POSTGRES_DB=");
+                if s.starts_with("postgres_db=") {
+                    let value = s.trim_start_matches("postgres_db=");
                     println!("DB: {}", value);
                 }
             }
@@ -653,9 +653,9 @@ fn extract_env_var(service: &Service, key: &str) -> Option<String> {
 }
 
 // Uso:
-let db = extract_env_var(&service, "POSTGRES_DB");
-let user = extract_env_var(&service, "POSTGRES_USER");
-let password = extract_env_var(&service, "POSTGRES_PASSWORD");
+let db = extract_env_var(&service, "postgres_db");
+let user = extract_env_var(&service, "postgres_user");
+let password = extract_env_var(&service, "postgres_password");
 ```
 
 ¿Ves cómo el patrón se repite? **Una función que sabe abrir las dos capas, y la reusás para cada variable.**
@@ -675,10 +675,10 @@ println!("env: {}", service.environment);     // ❌ no implementa Display
 Cuando buscás en un `BTreeMap<Value, Value>`, la clave es un `Value`, no un `&str`:
 ```rust
 // ❌ NO compila
-map.get("POSTGRES_DB")
+map.get("postgres_db")
 
 // ✅ Correcto
-map.get(&serde_yaml::Value::String("POSTGRES_DB".into()))
+map.get(&serde_yaml::Value::String("postgres_db".into()))
 ```
 
 ## Tip 3: `into()` convierte &str a Value
@@ -869,9 +869,9 @@ fn extract_port(service: &Service) -> Option<String> {
 fn build_db_data(service: &Service) -> Option<DBData> {
     Some(DBData {
         port: extract_port(service).unwrap_or_else(|| "5432".to_string()),
-        postgres_user: extract_env(service, "POSTGRES_USER")?,
-        postgres_password: extract_env(service, "POSTGRES_PASSWORD")?,
-        postgres_db: extract_env(service, "POSTGRES_DB")?,
+        postgres_user: extract_env(service, "postgres_user")?,
+        postgres_password: extract_env(service, "postgres_password")?,
+        postgres_db: extract_env(service, "postgres_db")?,
     })
 }
 ```

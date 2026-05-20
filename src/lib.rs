@@ -1,5 +1,8 @@
 use pyo3::prelude::*;
 use std::path::PathBuf;
 
-mod docker;
+mod scanner;
+mod heuristic;
+mod compose;
+mod psql;
 

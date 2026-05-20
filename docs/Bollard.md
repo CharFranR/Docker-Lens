@@ -732,7 +732,7 @@ async fn resolve_connection(
 ```
 1. find_db_service()
    └─ Encontrar el servicio de DB en docker-compose.yml
-   └─ Extraer: container_name, POSTGRES_USER, POSTGRES_DB
+   └─ Extraer: container_name, postgres_user, postgres_db
 
 2. find_container_by_name(docker, container_name)
    └─ Listar contenedores corriendo
