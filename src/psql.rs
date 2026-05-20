@@ -52,12 +52,12 @@ pub fn get_db_container_ip(service_winner: &str) -> Option<String> {
 }
 
 
-pub fn list_tables(credentials: &DbData) {
+pub fn list_tables(credentials: &DbData) -> std::io::Result<String>{
+
     let port = String::from("-p") + &credentials.port;
     let user = String::from("-U") + &credentials.postgres_user;
     let password =  &credentials.postgres_password;
     let db = String::from("-d") + &credentials.postgres_db;
-
 
     let output = Command::new("psql")
         .args([
@@ -69,11 +69,9 @@ pub fn list_tables(credentials: &DbData) {
             "-w"  // No pedir password
         ])
         .env("PGPASSWORD", password.as_str())
-        .output()
-        .expect("Failed to execute psql");
-    
+        .output()?;
 
-        println!("{}", String::from_utf8_lossy(&output.stdout));
+        let all_tables = String::from_utf8_lossy(&output.stdout).to_string();
 
-
+    Ok(all_tables)
 }
