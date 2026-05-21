@@ -56,10 +56,10 @@ def tables(path):
     
 
 @cli.command()
-@click.argument("path", required = True)
 @click.argument("query", required = True)
+@click.argument("path", required = True)
 
-def query(path, query):
+def query(query, path):
     # docker-lens query "" [path]
     
     if path == ".":
