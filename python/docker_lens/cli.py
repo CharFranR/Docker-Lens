@@ -6,12 +6,11 @@ import os
 
 @click.group()
 def cli():
-    """Docker-Lens: La puritita calidad"""
+    """Docker-Lens: accedé a tu base de datos desde el terminal"""
     pass
 
-#"/home/frandev/Documentos/Proyecto-Asignatura-Web"
 
-@cli.command()
+@cli.command(help="Muestra las credenciales de la base de datos")
 @click.argument("path", required=True)
 def info(path):
     # docker-lens info [path]
@@ -33,7 +32,7 @@ def info(path):
   
 
 
-@cli.command()
+@cli.command(help="Cuenta todas las tablas de la base de datos")
 @click.argument("path", required=True)
 def tables(path):
     # docker-lens tables [path]
@@ -57,12 +56,12 @@ def tables(path):
         click.echo("Base de datos inaccesible", err=True)
     
 
-@cli.command()
+@cli.command(help="Ejecuta una consulta SQL custom")
 @click.argument("query", required = True)
 @click.argument("path", required = True)
 
 def query(query, path):
-    # docker-lens query "" [path]
+    # docker-lens query "<sql>" [path]
     
     if path == ".":
         path = os.getcwd()
@@ -83,7 +82,7 @@ def query(query, path):
         click.echo("Base de datos inaccesible", err=True)
 
 
-@cli.command()
+@cli.command(help="Muestra las primeras N filas de una tabla")
 @click.argument("table_name")
 @click.option("-n", "--limit", default=10, type=int, help="Cantidad de filas")
 @click.argument("path", required=True)
@@ -102,7 +101,7 @@ def head(table_name, limit,  path):
 
     query.callback(sql, path)
 
-@cli.command()
+@cli.command(help="Muestra las últimas N filas de una tabla")
 @click.argument("table_name")
 @click.option("-n", "--limit", default=10, type=int, help="Cantidad de filas")
 @click.argument("path", required=True)
@@ -121,7 +120,7 @@ def tail(table_name, limit,  path):
     query.callback(sql, path)
 
 
-@cli.command()
+@cli.command(help="Muestra las columnas, tipos y constraints de una tabla")
 @click.argument("table_name")
 @click.argument("path", required=True)
 def schema(table_name, path):
@@ -136,7 +135,7 @@ def schema(table_name, path):
     query.callback(sql, path)
 
 
-@cli.command()
+@cli.command(help="Cuenta cantidad de filas en una tabla")
 @click.argument("table_name")
 @click.argument("path", required=True)
 def count(table_name, path):
@@ -150,7 +149,7 @@ def count(table_name, path):
     query.callback(sql, path)
 
 
-@cli.command()
+@cli.command(help="Vacía una tabla (CASCADE si tiene dependencias)")
 @click.argument("table_name")
 @click.option("--force", is_flag=True, help="Saltar confirmacion")
 @click.argument("path", required=True)
@@ -167,7 +166,7 @@ def truncate(table_name, force, path):
 
     query.callback(sql, path)
 
-@cli.command()
+@cli.command(help="Elimina una tabla (CASCADE si tiene dependencias)")
 @click.argument("table_name")
 @click.option("--force", is_flag=True, help="Saltar confirmacion")
 @click.argument("path", required=True)
@@ -184,7 +183,7 @@ def drop(table_name, force, path):
 
     query.callback(sql, path)
 
-@cli.command()
+@cli.command(help="Muestra el comando psql para conectarte manualmente")
 @click.argument("path", required=True)
 def connect(path):
     # docker-lens psql [path]	Abre psql interactivo
@@ -203,10 +202,10 @@ def connect(path):
     click.echo(f"psql -hlocalhost -p{c['port']} -U{c['postgres_user']} -d{c['postgres_db']}")
 
 
-@cli.command()
+@cli.command(help="Abre una sesión interactiva de psql")
 @click.argument("path", required=True)
 def psql(path):
-    # docker-lens connect [path]	Muestra el comando psql para copiar
+    # docker-lens psql [path]	Abre psql interactivo
 
     if path == ".":
         path = os.getcwd()
