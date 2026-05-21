@@ -1,13 +1,8 @@
 use std::process::Command;
 
 
-#[derive(Debug)]
-pub struct DbData {
-    pub port: String,
-    pub postgres_user: String,
-    pub postgres_password: String,
-    pub postgres_db: String
-}
+use crate::types::DbData;
+
 
 pub fn get_db_container_ip(service_winner: &str) -> Option<String> {
     let output = match Command::new("docker")

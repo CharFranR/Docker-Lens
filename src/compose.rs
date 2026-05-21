@@ -48,7 +48,7 @@ pub async fn docker_images (docker: &Docker){
     }
 }
 
-pub(crate) fn serializer_docker(docker_compose_text: String) -> Result<DockerCompose, Error> {
+pub fn serializer_docker(docker_compose_text: String) -> Result<DockerCompose, Error> {
     let compose_data: DockerCompose = serde_yaml::from_str(&docker_compose_text)
     .map_err(|e| Error::new(ErrorKind::InvalidData, format!("Error en el YAML: {}", e)))?;
     

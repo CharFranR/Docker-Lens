@@ -1,12 +1,10 @@
-use std::path::Path;
-use walkdir::WalkDir;
 use std::fs;                         
 use std::io::{Error, ErrorKind};     
 use std::path::PathBuf; 
 use std::collections::HashMap;
-use serde::{Deserialize};
 
 use crate::compose::serializer_docker;
+use crate::types::DbData;
 
 // La puta calidad y que fokin codigo espagueti
 
@@ -22,12 +20,6 @@ pub const IMAGE_LIST: &[&str] = &[
     "postgres", "postgis", "postgresql", "timescaledb", "timescale", "bitnami/postgresql",
 ] as &[&str];
 
-pub struct DbData {
-    pub port: String,
-    pub postgres_user: String,
-    pub postgres_password: String,
-    pub postgres_db: String
-}
 
 pub fn find_db_service (folder_path: &PathBuf) -> std::io::Result<DbData> {
 
@@ -144,9 +136,9 @@ pub fn find_db_service (folder_path: &PathBuf) -> std::io::Result<DbData> {
 
 
     let mut port_winner = String::from("5432");
-    let mut postgress_user_winner = String::from("postress");
-    let mut postgress_password_winner = String::from("postgress");
-    let mut postgress_db_winner = String::from("appdb");
+    let mut postgres_user_winner = String::from("postgres");
+    let mut postgres_password_winner = String::from("postgres");
+    let mut postgres_db_winner = String::from("appdb");
 
 
 
@@ -161,19 +153,19 @@ pub fn find_db_service (folder_path: &PathBuf) -> std::io::Result<DbData> {
 
         if let Some(postgress_user) = map.get(&serde_yaml::Value::String("postgres_user".into())) {
             if let Some(db_str) = postgress_user.as_str() {
-                postgress_user_winner = String::from(db_str);
+                postgres_user_winner = String::from(db_str);
             }
         }
 
         if let Some(postgress_password) = map.get(&serde_yaml::Value::String("postgres_password".into())) {
             if let Some(db_str) = postgress_password.as_str() {
-                postgress_password_winner = String::from(db_str);
+                postgres_password_winner = String::from(db_str);
             }
         }
 
         if let Some(postgres_db) = map.get(&serde_yaml::Value::String("postgres_db".into())) {
             if let Some(db_str) = postgres_db.as_str() {
-                postgress_db_winner = String::from(db_str);
+                postgres_db_winner = String::from(db_str);
             }
         }
     }
@@ -182,9 +174,9 @@ pub fn find_db_service (folder_path: &PathBuf) -> std::io::Result<DbData> {
 
     let credential = DbData{
         port: String::from(port_winner),
-        postgres_user: String::from(postgress_user_winner),
-        postgres_password: String::from(postgress_password_winner),
-        postgres_db: String::from(postgress_db_winner)
+        postgres_user: String::from(postgres_user_winner),
+        postgres_password: String::from(postgres_password_winner),
+        postgres_db: String::from(postgres_db_winner)
     };
     
 
