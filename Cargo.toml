@@ -8,10 +8,6 @@ edition = "2024"
 name = "docker_lens"
 crate-type = ["cdylib"]
 
-[[bin]]
-name = "test-run"
-path = "src/lib.rs"
-
 [dependencies]
 pyo3 = "0.27.0"
 bollard = "*"
