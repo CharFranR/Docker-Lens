@@ -1,4 +1,4 @@
-use std::process::Command;
+use std::{io::{Error, ErrorKind}, process::Command};
 
 
 use crate::types::DbData;
@@ -66,7 +66,36 @@ pub fn list_tables(credentials: &DbData) -> std::io::Result<String>{
         .env("PGPASSWORD", password.as_str())
         .output()?;
 
-        let all_tables = String::from_utf8_lossy(&output.stdout).to_string();
+    let all_tables = String::from_utf8_lossy(&output.stdout).to_string();
 
     Ok(all_tables)
+}
+
+pub fn make_query(credentials: &DbData, query:&str) -> std::io::Result<String>{
+
+    let port = String::from("-p") + &credentials.port;
+    let user = String::from("-U") + &credentials.postgres_user;
+    let password =  &credentials.postgres_password;
+    let db = String::from("-d") + &credentials.postgres_db;
+
+    let response = Command::new("psql")
+        .args([
+            "-hlocalhost",
+            port.as_str(),
+            user.as_str(),
+            db.as_str(),
+            "-c", query,
+            "-w"  // No pedir password
+        ])
+        .env("PGPASSWORD", password.as_str())
+        .output()?;
+
+    if !response.status.success() {
+        let stderr = String::from_utf8_lossy(&response.stderr);
+        return Err(Error::new(ErrorKind::Other, stderr.to_string()));
+    }
+
+    let output = String::from_utf8_lossy(&response.stdout).to_string();
+
+    Ok(output)
 }

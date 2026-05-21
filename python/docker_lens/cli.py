@@ -56,9 +56,30 @@ def tables(path):
     
 
 @cli.command()
-def query():
+@click.argument("path", required = True)
+@click.argument("query", required = True)
+
+def query(path, query):
     # docker-lens query "" [path]
-    print("Aqui te va la response")
+    
+    if path == ".":
+        path = os.getcwd()
+
+    try:
+        orchestator_path = docker_lens.find_orchestrator_py(path)
+    
+    except RuntimeError:
+        click.echo("No se encontró un archivo docker-compose.yml en este proyecto", err=True)
+        return
+    
+    try:
+        credenciales = docker_lens.find_db_py(orchestator_path)
+        response = docker_lens.make_query_py(credenciales, query)
+        click.echo(response)
+
+    except RuntimeError:
+        click.echo("Base de datos inaccesible", err=True)
+
 
 if __name__ == '__main__':
     cli()
