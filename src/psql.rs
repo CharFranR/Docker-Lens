@@ -1,7 +1,11 @@
 use std::{io::{Error, ErrorKind}, process::Command};
 
 
+use rusqlite::types::Value;
+
 use crate::types::DbData;
+use crate::types::TablaInfo;
+use crate::types::ColumnaInfo;
 
 
 pub fn get_db_container_ip(service_winner: &str) -> Option<String> {
@@ -101,7 +105,6 @@ pub fn make_query(credentials: &DbData, query:&str) -> std::io::Result<String>{
 }
 
 pub fn export_csv(credentials: &DbData, table: &str, file_path: &str) -> std::io::Result<()> {
-    use std::process::Stdio;
 
     let file = std::fs::File::create(file_path)?;
     let port = format!("-p{}", credentials.port);
@@ -130,4 +133,57 @@ pub fn export_csv(credentials: &DbData, table: &str, file_path: &str) -> std::io
     }
 
     Ok(())
+}
+
+
+fn get_db_struct (credentials: &DbData) -> std::io::Result<Vec<String>> {
+    
+    // Listamos todas las tablas
+
+    let tables_query = "SELECT tablename FROM pg_tables WHERE schemaname = 'public';";
+    let raw_tables = make_query(credentials, tables_query)?;
+
+
+    // Iteramos para obtener la estructura de toda la DB
+    let mut db_struct: Vec<String> = Vec::new();
+
+
+    for i in raw_tables.lines() {
+
+        let line = i.trim();
+        if line.is_empty() || line.starts_with("tablename") || line.starts_with('-') || line.starts_with('(') {
+            continue;
+        }
+
+        let query = format!("SELECT column_name, data_type, is_nullable, column_default FROM information_schema.columns WHERE table_name = '{}' ORDER BY ordinal_position;", i.trim().to_string());
+        
+        match make_query(credentials, query.as_str()) {
+            Ok(value) => {db_struct.push(value)} ,
+
+            Err(e) => return  Err(e),
+        };
+    }
+
+    Ok(db_struct)
+}
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::types::DbData;
+    #[test]
+    fn test_get_db_struct_real() {
+        let creds = DbData {
+            port: "5432".into(),
+            postgres_user: "postgres".into(),
+            postgres_password: "postgres".into(),
+            postgres_db: "appdb".into(),
+        };
+        let result = get_db_struct(&creds).unwrap();
+
+        println!("{:#?}", result);
+
+        assert!(!result.is_empty());
+    }
 }
