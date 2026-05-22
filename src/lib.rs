@@ -11,7 +11,7 @@ mod types;
 
 use crate::scanner::find_container_orchestrator;
 use crate::heuristic::find_db_service;
-use crate::psql::{list_tables, make_query};
+use crate::psql::{list_tables, make_query, export_csv};
 
 
 // Wrappers marca chapi, esta como peluda la libreria Py03
@@ -71,11 +71,28 @@ fn make_query_py(credenciales: &Bound<'_, PyDict>, query: String) -> PyResult<St
         .map_err(|e| PyRuntimeError::new_err(format!("{}", e)))
 }
 
+#[pyfunction]
+fn export_csv_py(credenciales: &Bound<'_, PyDict>, table_name: String, file_path: String) -> PyResult<()> {
+    let port = credenciales.get_item("port")?.ok_or_else(|| PyRuntimeError::new_err("Missing key: port"))?.extract()?;
+    let user = credenciales.get_item("postgres_user")?.ok_or_else(|| PyRuntimeError::new_err("Missing key: postgres_user"))?.extract()?;
+    let password = credenciales.get_item("postgres_password")?.ok_or_else(|| PyRuntimeError::new_err("Missing key: postgres_password"))?.extract()?;
+    let db = credenciales.get_item("postgres_db")?.ok_or_else(|| PyRuntimeError::new_err("Missing key: postgres_db"))?.extract()?;
+    let credentials = types::DbData {
+        port,
+        postgres_user: user,
+        postgres_password: password,
+        postgres_db: db,
+    };
+    export_csv(&credentials, &table_name, &file_path)
+        .map_err(|e| PyRuntimeError::new_err(format!("{}", e)))
+}
+
 #[pymodule]
 fn docker_lens(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(find_orchestrator_py, m)?)?;
     m.add_function(wrap_pyfunction!(find_db_py, m)?)?;
     m.add_function(wrap_pyfunction!(list_tables_py, m)?)?;
     m.add_function(wrap_pyfunction!(make_query_py, m)?)?;
+    m.add_function(wrap_pyfunction!(export_csv_py, m)?)?;
     Ok(())
 }

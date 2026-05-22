@@ -224,5 +224,59 @@ def psql(path):
     )
 
 
+
+@cli.command(help="Exporta una tabla a CSV")
+@click.argument("table_name")
+@click.option("-o", "--output", default=None, help="Archivo de salida (default: <tabla>.csv)")
+@click.argument("path", required=True)
+def export_csv(table_name, output, path):
+
+    if path == ".":
+        path = os.getcwd()
+
+    if not output:
+        output = f"{table_name}.csv"
+
+    try:
+        oc_path = docker_lens.find_orchestrator_py(path)
+        c = docker_lens.find_db_py(oc_path)
+    except RuntimeError:
+        click.echo("Base de datos inaccesible", err=True)
+        return
+
+    try:
+        docker_lens.export_csv_py(c, table_name, output)
+        click.echo(f"Exportado a {output}")
+    except RuntimeError as e:
+        click.echo(f"Error al exportar: {e}", err=True)
+
+
+@cli.command(help="Exporta todas las tablas a CSV")
+@click.argument("path", required=True)
+def export_all(path):
+
+    if path == ".":
+        path = os.getcwd()
+    try:
+        oc_path = docker_lens.find_orchestrator_py(path)
+        c = docker_lens.find_db_py(oc_path)
+
+    except RuntimeError:
+        click.echo("Base de datos inaccesible", err=True)
+        return
+    
+    tablas_raw = docker_lens.list_tables_py(c)
+    
+
+    tablas = [line.split("|")[1].strip() for line in tablas_raw.strip().split("\n")
+              if "|" in line and "public" in line]
+    
+    for t in tablas:
+        output = f"{t}.csv"
+        docker_lens.export_csv_py(c, t, output)
+        click.echo(f"✓ {output}")
+        
+    click.echo(f"\nExportadas {len(tablas)} tablas")
+
 if __name__ == '__main__':
     cli()

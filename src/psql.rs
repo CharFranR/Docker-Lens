@@ -99,3 +99,35 @@ pub fn make_query(credentials: &DbData, query:&str) -> std::io::Result<String>{
 
     Ok(output)
 }
+
+pub fn export_csv(credentials: &DbData, table: &str, file_path: &str) -> std::io::Result<()> {
+    use std::process::Stdio;
+
+    let file = std::fs::File::create(file_path)?;
+    let port = format!("-p{}", credentials.port);
+    let user = format!("-U{}", credentials.postgres_user);
+    let db = format!("-d{}", credentials.postgres_db);
+
+    let sql = format!("COPY (SELECT * FROM {table}) TO STDOUT WITH CSV HEADER");
+    let mut child = Command::new("psql")
+        .args([
+            "-hlocalhost",
+            &port,
+            &user,
+            &db,
+            "-c",
+            &sql,
+            "-w",
+        ])
+        .env("PGPASSWORD", &credentials.postgres_password)
+        .stdout(file)
+        .spawn()?;
+
+    let status = child.wait()?;
+
+    if !status.success() {
+        return Err(Error::new(ErrorKind::Other, "Error al exportar CSV"));
+    }
+
+    Ok(())
+}
