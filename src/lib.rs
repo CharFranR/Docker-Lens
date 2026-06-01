@@ -1,19 +1,18 @@
-use pyo3::prelude::*;
 use pyo3::exceptions::PyRuntimeError;
+use pyo3::prelude::*;
 use pyo3::types::PyDict;
 use std::path::{Path, PathBuf};
 
-mod scanner;
-mod heuristic;
 mod compose;
-mod types;
 mod db;
+mod heuristic;
+mod scanner;
+mod types;
 
-use crate::scanner::find_container_orchestrator;
+use crate::db::export_to_sqlite;
 use crate::heuristic::find_db_service;
-use crate::db::postgres::export_to_sqlite;
-use crate::types::GenericCredentials;
-
+use crate::scanner::find_container_orchestrator;
+use crate::types::{DbType, GenericCredentials};
 
 // Wrappers marca chapi, esta como peluda la libreria Py03
 
@@ -57,12 +56,18 @@ fn find_orchestrator_py(file_path: String) -> PyResult<String> {
 #[pyfunction]
 fn find_db_py(py: Python<'_>, file_path: String) -> PyResult<Bound<'_, PyDict>> {
     let path = PathBuf::from(&file_path);
-    let data = find_db_service(&path)
-        .map_err(|e| PyRuntimeError::new_err(format!("{}", e)))?;
-    // Convert legacy DbData → GenericCredentials (heuristic still returns DbData)
-    let creds: GenericCredentials = data.into();
+    let creds = find_db_service(&path).map_err(|e| PyRuntimeError::new_err(format!("{}", e)))?;
+
+    let db_type_str = match creds.db_type {
+        DbType::Postgres => "postgres",
+        DbType::Mysql => "mysql",
+        DbType::Mariadb => "mariadb",
+        DbType::Sqlite => "sqlite",
+        DbType::Mongo => "mongo",
+    };
+
     let dict = PyDict::new(py);
-    dict.set_item("db_type", "postgres")?;
+    dict.set_item("db_type", db_type_str)?;
     dict.set_item("host", &creds.host)?;
     dict.set_item("port", &creds.port)?;
     dict.set_item("user", &creds.user)?;
@@ -74,31 +79,30 @@ fn find_db_py(py: Python<'_>, file_path: String) -> PyResult<Bound<'_, PyDict>> 
 #[pyfunction]
 fn list_tables_py(credenciales: &Bound<'_, PyDict>) -> PyResult<String> {
     let creds = dict_to_creds(credenciales)?;
-    crate::db::list_tables(&creds)
-        .map_err(|e| PyRuntimeError::new_err(format!("{}", e)))
+    crate::db::list_tables(&creds).map_err(|e| PyRuntimeError::new_err(format!("{}", e)))
 }
-
 
 #[pyfunction]
 fn make_query_py(credenciales: &Bound<'_, PyDict>, query: String) -> PyResult<String> {
     let creds = dict_to_creds(credenciales)?;
-    crate::db::make_query(&creds, &query)
-        .map_err(|e| PyRuntimeError::new_err(format!("{}", e)))
+    crate::db::make_query(&creds, &query).map_err(|e| PyRuntimeError::new_err(format!("{}", e)))
 }
 
 #[pyfunction]
-fn export_csv_py(credenciales: &Bound<'_, PyDict>, table_name: String, file_path: String) -> PyResult<()> {
+fn export_csv_py(
+    credenciales: &Bound<'_, PyDict>,
+    table_name: String,
+    file_path: String,
+) -> PyResult<()> {
     let creds = dict_to_creds(credenciales)?;
     crate::db::export_csv(&creds, &table_name, &file_path)
         .map_err(|e| PyRuntimeError::new_err(format!("{}", e)))
 }
 
-
 #[pyfunction]
 fn export_to_sqlite_py(credenciales: &Bound<'_, PyDict>, sqlite_path: String) -> PyResult<()> {
     let creds = dict_to_creds(credenciales)?;
-    export_to_sqlite(&creds, &sqlite_path)
-        .map_err(|e| PyRuntimeError::new_err(format!("{}", e)))
+    export_to_sqlite(&creds, &sqlite_path).map_err(|e| PyRuntimeError::new_err(format!("{}", e)))
 }
 
 #[pymodule]
