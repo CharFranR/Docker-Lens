@@ -6,15 +6,44 @@ use std::path::{Path, PathBuf};
 mod scanner;
 mod heuristic;
 mod compose;
-mod psql;
 mod types;
+mod db;
 
 use crate::scanner::find_container_orchestrator;
 use crate::heuristic::find_db_service;
-use crate::psql::{list_tables, make_query, export_csv, export_to_sqlite};
+use crate::db::postgres::export_to_sqlite;
+use crate::types::GenericCredentials;
 
 
 // Wrappers marca chapi, esta como peluda la libreria Py03
+
+/// Extract a required string key from a PyDict.
+fn extract_str(dict: &Bound<'_, PyDict>, key: &str) -> PyResult<String> {
+    dict.get_item(key)?
+        .ok_or_else(|| PyRuntimeError::new_err(format!("Missing key: {key}")))?
+        .extract()
+}
+
+/// Build GenericCredentials from a Python dict.
+fn dict_to_creds(dict: &Bound<'_, PyDict>) -> PyResult<GenericCredentials> {
+    let db_type_str: String = extract_str(dict, "db_type")?;
+    let db_type = match db_type_str.as_str() {
+        "postgres" => types::DbType::Postgres,
+        "mysql" => types::DbType::Mysql,
+        "mariadb" => types::DbType::Mariadb,
+        "sqlite" => types::DbType::Sqlite,
+        "mongo" => types::DbType::Mongo,
+        other => return Err(PyRuntimeError::new_err(format!("Unknown db_type: {other}"))),
+    };
+    Ok(GenericCredentials {
+        db_type,
+        host: extract_str(dict, "host")?,
+        port: extract_str(dict, "port")?,
+        user: extract_str(dict, "user")?,
+        password: extract_str(dict, "password")?,
+        database: extract_str(dict, "database")?,
+    })
+}
 
 #[pyfunction]
 fn find_orchestrator_py(file_path: String) -> PyResult<String> {
@@ -30,77 +59,45 @@ fn find_db_py(py: Python<'_>, file_path: String) -> PyResult<Bound<'_, PyDict>> 
     let path = PathBuf::from(&file_path);
     let data = find_db_service(&path)
         .map_err(|e| PyRuntimeError::new_err(format!("{}", e)))?;
+    // Convert legacy DbData → GenericCredentials (heuristic still returns DbData)
+    let creds: GenericCredentials = data.into();
     let dict = PyDict::new(py);
-    dict.set_item("port", &data.port)?;
-    dict.set_item("postgres_user", &data.postgres_user)?;
-    dict.set_item("postgres_password", &data.postgres_password)?;
-    dict.set_item("postgres_db", &data.postgres_db)?;
+    dict.set_item("db_type", "postgres")?;
+    dict.set_item("host", &creds.host)?;
+    dict.set_item("port", &creds.port)?;
+    dict.set_item("user", &creds.user)?;
+    dict.set_item("password", &creds.password)?;
+    dict.set_item("database", &creds.database)?;
     Ok(dict)
 }
 
 #[pyfunction]
 fn list_tables_py(credenciales: &Bound<'_, PyDict>) -> PyResult<String> {
-    let port = credenciales.get_item("port")?.ok_or_else(|| PyRuntimeError::new_err("Missing key: port"))?.extract()?;
-    let user = credenciales.get_item("postgres_user")?.ok_or_else(|| PyRuntimeError::new_err("Missing key: port"))?.extract()?;
-    let password = credenciales.get_item("postgres_password")?.ok_or_else(|| PyRuntimeError::new_err("Missing key: port"))?.extract()?;
-    let db = credenciales.get_item("postgres_db")?.ok_or_else(|| PyRuntimeError::new_err("Missing key: port"))?.extract()?;
-    let credentials = types::DbData {
-        port,
-        postgres_user: user,
-        postgres_password: password,
-        postgres_db: db,
-    };
-    list_tables(&credentials)
+    let creds = dict_to_creds(credenciales)?;
+    crate::db::list_tables(&creds)
         .map_err(|e| PyRuntimeError::new_err(format!("{}", e)))
 }
 
 
 #[pyfunction]
 fn make_query_py(credenciales: &Bound<'_, PyDict>, query: String) -> PyResult<String> {
-    let port = credenciales.get_item("port")?.ok_or_else(|| PyRuntimeError::new_err("Missing key: port"))?.extract()?;
-    let user = credenciales.get_item("postgres_user")?.ok_or_else(|| PyRuntimeError::new_err("Missing key: postgres_user"))?.extract()?;
-    let password = credenciales.get_item("postgres_password")?.ok_or_else(|| PyRuntimeError::new_err("Missing key: postgres_password"))?.extract()?;
-    let db = credenciales.get_item("postgres_db")?.ok_or_else(|| PyRuntimeError::new_err("Missing key: postgres_db"))?.extract()?;
-    let credentials = types::DbData {
-        port,
-        postgres_user: user,
-        postgres_password: password,
-        postgres_db: db,
-    };
-    make_query(&credentials, &query)
+    let creds = dict_to_creds(credenciales)?;
+    crate::db::make_query(&creds, &query)
         .map_err(|e| PyRuntimeError::new_err(format!("{}", e)))
 }
 
 #[pyfunction]
 fn export_csv_py(credenciales: &Bound<'_, PyDict>, table_name: String, file_path: String) -> PyResult<()> {
-    let port = credenciales.get_item("port")?.ok_or_else(|| PyRuntimeError::new_err("Missing key: port"))?.extract()?;
-    let user = credenciales.get_item("postgres_user")?.ok_or_else(|| PyRuntimeError::new_err("Missing key: postgres_user"))?.extract()?;
-    let password = credenciales.get_item("postgres_password")?.ok_or_else(|| PyRuntimeError::new_err("Missing key: postgres_password"))?.extract()?;
-    let db = credenciales.get_item("postgres_db")?.ok_or_else(|| PyRuntimeError::new_err("Missing key: postgres_db"))?.extract()?;
-    let credentials = types::DbData {
-        port,
-        postgres_user: user,
-        postgres_password: password,
-        postgres_db: db,
-    };
-    export_csv(&credentials, &table_name, &file_path)
+    let creds = dict_to_creds(credenciales)?;
+    crate::db::export_csv(&creds, &table_name, &file_path)
         .map_err(|e| PyRuntimeError::new_err(format!("{}", e)))
 }
 
 
 #[pyfunction]
 fn export_to_sqlite_py(credenciales: &Bound<'_, PyDict>, sqlite_path: String) -> PyResult<()> {
-    let port = credenciales.get_item("port")?.ok_or_else(|| PyRuntimeError::new_err("Missing key: port"))?.extract()?;
-    let user = credenciales.get_item("postgres_user")?.ok_or_else(|| PyRuntimeError::new_err("Missing key: postgres_user"))?.extract()?;
-    let password = credenciales.get_item("postgres_password")?.ok_or_else(|| PyRuntimeError::new_err("Missing key: postgres_password"))?.extract()?;
-    let db = credenciales.get_item("postgres_db")?.ok_or_else(|| PyRuntimeError::new_err("Missing key: postgres_db"))?.extract()?;
-    let credentials = types::DbData {
-        port,
-        postgres_user: user,
-        postgres_password: password,
-        postgres_db: db,
-    };
-    export_to_sqlite(&credentials, &sqlite_path)
+    let creds = dict_to_creds(credenciales)?;
+    export_to_sqlite(&creds, &sqlite_path)
         .map_err(|e| PyRuntimeError::new_err(format!("{}", e)))
 }
 
