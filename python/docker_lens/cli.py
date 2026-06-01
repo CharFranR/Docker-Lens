@@ -278,5 +278,31 @@ def export_all(path):
         
     click.echo(f"\nExportadas {len(tablas)} tablas")
 
+
+@cli.command(help="Exporta toda la base de datos a SQLite")
+@click.option("-o", "--output", default=None, help="Archivo de salida (default: <db>.db)")
+@click.argument("path", required=True)
+def export_sqlite(output, path):
+
+    if path == ".":
+        path = os.getcwd()
+
+    try:
+        oc_path = docker_lens.find_orchestrator_py(path)
+        c = docker_lens.find_db_py(oc_path)
+    except RuntimeError:
+        click.echo("Base de datos inaccesible", err=True)
+        return
+
+    if not output:
+        output = f"{c['postgres_db']}.db"
+
+    try:
+        docker_lens.export_to_sqlite_py(c, output)
+        click.echo(f"Exportado a {output}")
+    except RuntimeError as e:
+        click.echo(f"Error al exportar: {e}", err=True)
+
+
 if __name__ == '__main__':
     cli()
