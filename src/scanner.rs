@@ -1,27 +1,9 @@
-use std::fs;
 use std::io::{Error, ErrorKind};
 use std::path::Path;
 use std::path::PathBuf;
 use walkdir::WalkDir;
 
 // Este archivo contiene todas las funciones respecto al escaneo de las carpetas del proyecto donde se invoque la libreria
-
-pub fn list_files(file_path: &String) -> std::io::Result<Vec<String>> {
-    // Lista todos los archivos en la ruta proporcionada
-
-    let mut files_vector: Vec<String> = Vec::new();
-
-    for entry in fs::read_dir(file_path)? {
-        let entry = entry?;
-        let path = entry.path();
-
-        if path.is_file() {
-            files_vector.push(entry.file_name().to_string_lossy().to_string());
-        }
-    }
-
-    Ok(files_vector)
-}
 
 pub fn file_is_here(file_path: &str, target: &str) -> bool {
     // Determina si cierto archivo se encuentra (o no) en la ruta proporcionada

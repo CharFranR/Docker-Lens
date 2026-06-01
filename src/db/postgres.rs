@@ -143,36 +143,6 @@ pub fn export_csv(
 
 // ── Schema helpers (pure functions, independently testable) ────────────────
 
-fn get_db_struct(credentials: &GenericCredentials) -> std::io::Result<Vec<String>> {
-    let tables_query = "SELECT tablename FROM pg_tables WHERE schemaname = 'public';";
-    let raw_tables = make_query(credentials, tables_query)?;
-
-    let mut db_struct: Vec<String> = Vec::new();
-
-    for i in raw_tables.lines() {
-        let line = i.trim();
-        if line.is_empty()
-            || line.starts_with("tablename")
-            || line.starts_with('-')
-            || line.starts_with('(')
-        {
-            continue;
-        }
-
-        let query = format!(
-            "SELECT column_name, data_type, is_nullable, column_default FROM information_schema.columns WHERE table_name = '{}' ORDER BY ordinal_position;",
-            i.trim()
-        );
-
-        match make_query(credentials, query.as_str()) {
-            Ok(value) => db_struct.push(value),
-            Err(e) => return Err(e),
-        };
-    }
-
-    Ok(db_struct)
-}
-
 /// Map a PostgreSQL type to its SQLite equivalent.
 pub fn map_pg_type_to_sqlite(pg_type: &str) -> String {
     let normalized = pg_type.to_lowercase();
@@ -657,23 +627,18 @@ mod tests {
 
     // ── Integration approval test (requires PG) ────────────────────────
 
-    /// Approval test: same as original `psql::tests::test_get_db_struct_real`,
-    /// now routed through GenericCredentials and the extracted postgres adapter.
+    /// Approval test: verify make_query works against a real PostgreSQL.
     #[test]
-    fn test_get_db_struct_real() {
+    fn test_make_query_real() {
         let creds = pg_creds();
-        // This test requires a running PostgreSQL on localhost:5432
-        // with user=postgres, password=postgres, database=appdb.
-        let result = super::get_db_struct(&creds);
+        let result = make_query(&creds, "SELECT 1 AS test");
         match result {
             Ok(data) => {
                 println!("{:#?}", data);
-                assert!(!data.is_empty());
+                assert!(data.contains("test"));
             }
             Err(e) => {
-                // Infrastructure failure: PG not available.
-                // This is expected in CI without PG. Mark as known.
-                if e.kind() == ErrorKind::Other && e.to_string().contains("Conexión") {
+                if e.to_string().contains("Conexión") {
                     eprintln!("SKIP: PostgreSQL not available — infrastructure.");
                 } else {
                     panic!("Unexpected error: {}", e);

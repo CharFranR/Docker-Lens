@@ -39,6 +39,17 @@ pub fn export_csv(creds: &GenericCredentials, table: &str, path: &str) -> std::i
     }
 }
 
+/// Get the Docker container IP for a given service name.
+/// Only works for Postgres, MySQL, and MariaDB (CLI-based adapters).
+/// Returns None for SQLite (file-based) and MongoDB (crate-based).
+pub fn get_container_ip(creds: &GenericCredentials, service_name: &str) -> Option<String> {
+    match creds.db_type {
+        DbType::Postgres => postgres::get_container_ip(service_name),
+        DbType::Mysql | DbType::Mariadb => mysql::get_container_ip(service_name),
+        DbType::Sqlite | DbType::Mongo => None,
+    }
+}
+
 /// Inspect database schema and return structured table/column info.
 /// PostgreSQL and MySQL/MariaDB use information_schema.columns.
 /// SQLite uses PRAGMA table_info.

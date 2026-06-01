@@ -105,6 +105,43 @@ fn export_to_sqlite_py(credenciales: &Bound<'_, PyDict>, sqlite_path: String) ->
     export_to_sqlite(&creds, &sqlite_path).map_err(|e| PyRuntimeError::new_err(format!("{}", e)))
 }
 
+#[pyfunction]
+fn inspect_schema_py(py: Python<'_>, credenciales: &Bound<'_, PyDict>) -> PyResult<Vec<Py<PyAny>>> {
+    let creds = dict_to_creds(credenciales)?;
+    let tables = crate::db::inspect_schema(&creds)
+        .map_err(|e| PyRuntimeError::new_err(format!("{}", e)))?;
+
+    let result: Vec<Py<PyAny>> = tables
+        .iter()
+        .map(|t| {
+            let dict = PyDict::new(py);
+            dict.set_item("name", &t.nombre).unwrap();
+            let columns: Vec<Py<PyAny>> = t
+                .columnas
+                .iter()
+                .map(|c| {
+                    let col_dict = PyDict::new(py);
+                    col_dict.set_item("name", &c.nombre).unwrap();
+                    col_dict.set_item("type", &c.tipo).unwrap();
+                    col_dict.set_item("nullable", &c.nullable).unwrap();
+                    col_dict.set_item("default", &c.default).unwrap();
+                    col_dict.into_any().unbind()
+                })
+                .collect();
+            dict.set_item("columns", columns).unwrap();
+            dict.into_any().unbind()
+        })
+        .collect();
+
+    Ok(result)
+}
+
+#[pyfunction]
+fn get_container_ip_py(credenciales: &Bound<'_, PyDict>, service_name: String) -> PyResult<Option<String>> {
+    let creds = dict_to_creds(credenciales)?;
+    Ok(crate::db::get_container_ip(&creds, &service_name))
+}
+
 #[pymodule]
 fn docker_lens(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(find_orchestrator_py, m)?)?;
@@ -113,5 +150,7 @@ fn docker_lens(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(make_query_py, m)?)?;
     m.add_function(wrap_pyfunction!(export_csv_py, m)?)?;
     m.add_function(wrap_pyfunction!(export_to_sqlite_py, m)?)?;
+    m.add_function(wrap_pyfunction!(inspect_schema_py, m)?)?;
+    m.add_function(wrap_pyfunction!(get_container_ip_py, m)?)?;
     Ok(())
 }
