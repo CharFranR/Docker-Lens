@@ -5,7 +5,9 @@ use std::process::Command;
 
 use rusqlite::Connection;
 
-use crate::types::{ColumnaInfo, GenericCredentials, SQLiteColumn, SQLiteSchema, SQLiteTable, TablaInfo};
+use crate::types::{
+    ColumnaInfo, GenericCredentials, SQLiteColumn, SQLiteSchema, SQLiteTable, TablaInfo,
+};
 
 /// Resolve the Docker container IP for a given service name.
 pub fn get_container_ip(service_winner: &str) -> Option<String> {
@@ -188,9 +190,7 @@ pub fn map_pg_type_to_sqlite(pg_type: &str) -> String {
         return "REAL".to_string();
     }
 
-    if normalized.contains("char")
-        || normalized.contains("text")
-        || normalized.contains("varchar")
+    if normalized.contains("char") || normalized.contains("text") || normalized.contains("varchar")
     {
         return "TEXT".to_string();
     }
@@ -386,12 +386,8 @@ pub fn export_to_sqlite(
     let db_tables = parse_db_structure(&raw_structures, &table_names);
     let schema = convert_to_sqlite_schema(&db_tables);
 
-    let conn = Connection::open(sqlite_path).map_err(|e| {
-        Error::new(
-            ErrorKind::Other,
-            format!("Error creando SQLite: {}", e),
-        )
-    })?;
+    let conn = Connection::open(sqlite_path)
+        .map_err(|e| Error::new(ErrorKind::Other, format!("Error creando SQLite: {}", e)))?;
 
     for table in &schema.tables {
         let create_sql = generate_create_table(table);
@@ -453,10 +449,7 @@ pub fn export_to_sqlite(
 
             for result in rdr.records() {
                 let record = result.map_err(|e| {
-                    Error::new(
-                        ErrorKind::Other,
-                        format!("Error leyendo registro: {}", e),
-                    )
+                    Error::new(ErrorKind::Other, format!("Error leyendo registro: {}", e))
                 })?;
 
                 let values: Vec<&str> = record.iter().collect();
@@ -470,9 +463,8 @@ pub fn export_to_sqlite(
             }
         }
 
-        tx.commit().map_err(|e| {
-            Error::new(ErrorKind::Other, format!("Error en commit: {}", e))
-        })?;
+        tx.commit()
+            .map_err(|e| Error::new(ErrorKind::Other, format!("Error en commit: {}", e)))?;
 
         let _ = std::fs::remove_file(&temp_csv);
     }
@@ -681,9 +673,7 @@ mod tests {
             Err(e) => {
                 // Infrastructure failure: PG not available.
                 // This is expected in CI without PG. Mark as known.
-                if e.kind() == ErrorKind::Other
-                    && e.to_string().contains("Conexión")
-                {
+                if e.kind() == ErrorKind::Other && e.to_string().contains("Conexión") {
                     eprintln!("SKIP: PostgreSQL not available — infrastructure.");
                 } else {
                     panic!("Unexpected error: {}", e);

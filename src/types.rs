@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 /// Supported database engine types.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum DbType {
     Postgres,
     Mysql,
@@ -45,11 +45,13 @@ impl From<DbData> for GenericCredentials {
     }
 }
 
+#[derive(Debug)]
 pub struct TablaInfo {
     pub nombre: String,
     pub columnas: Vec<ColumnaInfo>,
 }
 
+#[derive(Debug)]
 pub struct ColumnaInfo {
     pub nombre: String,
     pub tipo: String,
