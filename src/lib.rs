@@ -113,25 +113,25 @@ fn inspect_schema_py(py: Python<'_>, credenciales: &Bound<'_, PyDict>) -> PyResu
 
     let result: Vec<Py<PyAny>> = tables
         .iter()
-        .map(|t| {
+        .map(|t| -> PyResult<Py<PyAny>> {
             let dict = PyDict::new(py);
-            dict.set_item("name", &t.nombre).unwrap();
+            dict.set_item("name", &t.nombre)?;
             let columns: Vec<Py<PyAny>> = t
                 .columnas
                 .iter()
-                .map(|c| {
+                .map(|c| -> PyResult<Py<PyAny>> {
                     let col_dict = PyDict::new(py);
-                    col_dict.set_item("name", &c.nombre).unwrap();
-                    col_dict.set_item("type", &c.tipo).unwrap();
-                    col_dict.set_item("nullable", &c.nullable).unwrap();
-                    col_dict.set_item("default", &c.default).unwrap();
-                    col_dict.into_any().unbind()
+                    col_dict.set_item("name", &c.nombre)?;
+                    col_dict.set_item("type", &c.tipo)?;
+                    col_dict.set_item("nullable", &c.nullable)?;
+                    col_dict.set_item("default", &c.default)?;
+                    Ok(col_dict.into_any().unbind())
                 })
-                .collect();
-            dict.set_item("columns", columns).unwrap();
-            dict.into_any().unbind()
+                .collect::<PyResult<Vec<_>>>()?;
+            dict.set_item("columns", columns)?;
+            Ok(dict.into_any().unbind())
         })
-        .collect();
+        .collect::<PyResult<Vec<_>>>()?;
 
     Ok(result)
 }

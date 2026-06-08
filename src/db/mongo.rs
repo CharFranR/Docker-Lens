@@ -36,18 +36,18 @@ fn build_uri(creds: &GenericCredentials) -> String {
     }
 }
 
-/// Connect to MongoDB synchronously using an internal tokio runtime.
-fn connect(creds: &GenericCredentials) -> std::io::Result<Client> {
-    let uri = build_uri(creds);
-    let rt = tokio::runtime::Runtime::new()
-        .map_err(|e| Error::new(ErrorKind::Other, format!("Tokio runtime: {e}")))?;
+// /// Connect to MongoDB synchronously using an internal tokio runtime.
+// fn connect(creds: &GenericCredentials) -> std::io::Result<Client> {
+//     let uri = build_uri(creds);
+//     let rt = tokio::runtime::Runtime::new()
+//         .map_err(|e| Error::new(ErrorKind::Other, format!("Tokio runtime: {e}")))?;
 
-    rt.block_on(async {
-        Client::with_uri_str(&uri)
-            .await
-            .map_err(|e| Error::new(ErrorKind::Other, format!("MongoDB connect: {e}")))
-    })
-}
+//     rt.block_on(async {
+//         Client::with_uri_str(&uri)
+//             .await
+//             .map_err(|e| Error::new(ErrorKind::Other, format!("MongoDB connect: {e}")))
+//     })
+// }
 
 /// Get the database name from credentials.
 fn db_name(creds: &GenericCredentials) -> &str {
@@ -60,13 +60,14 @@ fn db_name(creds: &GenericCredentials) -> &str {
 
 /// List all collections in the database.
 pub fn list_tables(creds: &GenericCredentials) -> std::io::Result<String> {
-    let client = connect(creds)?;
     let rt = tokio::runtime::Runtime::new()
         .map_err(|e| Error::new(ErrorKind::Other, format!("Tokio runtime: {e}")))?;
 
     let dbn = db_name(creds).to_string();
 
+    let uri = build_uri(creds);
     rt.block_on(async {
+        let client = Client::with_uri_str(&uri).await.map_err(|e| Error::new(ErrorKind::Other, format!("MongoDB connect: {e}")))?;
         let db = client.database(&dbn);
         let names = db
             .list_collection_names(None)
@@ -89,7 +90,7 @@ pub fn list_tables(creds: &GenericCredentials) -> std::io::Result<String> {
 /// {"aggregate": "collection", "pipeline": [{"$match": {}}]}
 /// ```
 pub fn make_query(creds: &GenericCredentials, query: &str) -> std::io::Result<String> {
-    let client = connect(creds)?;
+
     let rt = tokio::runtime::Runtime::new()
         .map_err(|e| Error::new(ErrorKind::Other, format!("Tokio runtime: {e}")))?;
 
@@ -103,7 +104,9 @@ pub fn make_query(creds: &GenericCredentials, query: &str) -> std::io::Result<St
         )
     })?;
 
+    let uri = build_uri(creds);
     rt.block_on(async {
+        let client = Client::with_uri_str(&uri).await.map_err(|e| Error::new(ErrorKind::Other, format!("MongoDB connect: {e}")))?;
         let db = client.database(&dbn);
 
         // Determine action from JSON fields
@@ -190,14 +193,18 @@ pub fn export_csv(
     collection: &str,
     file_path: &str,
 ) -> std::io::Result<()> {
-    let client = connect(creds)?;
+    
     let rt = tokio::runtime::Runtime::new()
         .map_err(|e| Error::new(ErrorKind::Other, format!("Tokio runtime: {e}")))?;
 
     let dbn = db_name(creds).to_string();
     let coll_name = collection.to_string();
 
+     let uri = build_uri(creds);
     rt.block_on(async {
+
+        let client = Client::with_uri_str(&uri).await.map_err(|e| Error::new(ErrorKind::Other, format!("MongoDB connect: {e}")))?;
+
         let db = client.database(&dbn);
         let coll: Collection<Document> = db.collection(&coll_name);
 
