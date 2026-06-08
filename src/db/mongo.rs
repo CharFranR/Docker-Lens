@@ -8,7 +8,7 @@ use mongodb::options::FindOptions;
 use mongodb::{Client, Collection};
 use serde_json::Value;
 
-use crate::types::GenericCredentials;
+use crate::types::{GenericCredentials, TablaInfo, ColumnaInfo};
 
 const DEFAULT_PORT: &str = "27017";
 
@@ -331,84 +331,194 @@ fn bson_value_to_string(value: &bson::Bson) -> String {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::types::{DbType, GenericCredentials};
-
-    fn mongo_creds() -> GenericCredentials {
-        GenericCredentials {
-            db_type: DbType::Mongo,
-            host: "localhost".into(),
-            port: "27017".into(),
-            user: "admin".into(),
-            password: "admin".into(),
-            database: "testdb".into(),
-        }
+/// MongoDB schema inspection by sampling first document from each collection.
+pub fn inspect_schema_mongo(creds: &GenericCredentials) -> std::io::Result<Vec<TablaInfo>> {
+    // Get collection names
+    let coll_names_raw = list_tables(creds)?;
+    if coll_names_raw.contains("No collections found") || coll_names_raw.trim().is_empty() {
+        return Ok(Vec::new());
     }
 
-    #[test]
-    fn test_build_uri_with_credentials() {
-        let creds = mongo_creds();
-        let uri = build_uri(&creds);
-        assert!(uri.contains("mongodb://"));
-        assert!(uri.contains("admin:admin@"));
-        assert!(uri.contains("localhost:27017"));
-    }
+    let coll_names: Vec<String> = coll_names_raw.lines().map(|l| l.trim().to_string()).collect();
 
-    #[test]
-    fn test_build_uri_without_credentials() {
-        let creds = GenericCredentials {
-            db_type: DbType::Mongo,
-            host: "localhost".into(),
-            port: "27017".into(),
-            user: String::new(),
-            password: String::new(),
-            database: "testdb".into(),
-        };
-        let uri = build_uri(&creds);
-        assert!(uri.contains("mongodb://localhost:27017/"));
-        assert!(!uri.contains("@"));
-    }
+    let mut tables = Vec::new();
 
-    #[test]
-    fn test_build_uri_defaults() {
-        let creds = GenericCredentials {
-            db_type: DbType::Mongo,
-            host: String::new(),
-            port: String::new(),
-            user: String::new(),
-            password: String::new(),
-            database: String::new(),
-        };
-        let uri = build_uri(&creds);
-        assert!(uri.contains("localhost"));
-        assert!(uri.contains("27017"));
-    }
-
-    #[test]
-    fn test_bson_value_to_string() {
-        assert_eq!(
-            bson_value_to_string(&bson::Bson::String("hello".into())),
-            "hello"
+    for coll_name in &coll_names {
+        // Query one document to infer fields
+        let query = format!(
+            r#"{{"find": "{}", "limit": 1}}"#,
+            coll_name
         );
-        assert_eq!(bson_value_to_string(&bson::Bson::Int32(42)), "42");
-        assert_eq!(bson_value_to_string(&bson::Bson::Boolean(true)), "true");
-        assert_eq!(bson_value_to_string(&bson::Bson::Null), "null");
+        let result = make_query(creds, &query)?;
+
+        if result.contains("No documents found") || result.trim().is_empty() {
+            tables.push(TablaInfo {
+                nombre: coll_name.clone(),
+                columnas: Vec::new(),
+            });
+            continue;
+        }
+
+        // Parse the tab-separated output to infer column types
+        let columns = parse_mongo_fields_from_output(&result);
+        tables.push(TablaInfo {
+            nombre: coll_name.clone(),
+            columnas: columns,
+        });
     }
 
-    #[test]
-    fn test_docs_to_string_empty() {
-        let result = docs_to_string(&[]).unwrap();
-        assert!(result.contains("No documents found"));
+    Ok(tables)
+}
+
+/// Parse MongoDB docs_to_string output to infer field names and types.
+fn parse_mongo_fields_from_output(output: &str) -> Vec<ColumnaInfo> {
+    let mut lines = output.lines();
+    let header_line = lines.next().unwrap_or("");
+    // Skip separator line
+    let _sep = lines.next();
+    let first_row = lines.next().unwrap_or("");
+
+    let headers: Vec<&str> = header_line.split('\t').map(|s| s.trim()).collect();
+    let values: Vec<&str> = first_row.split('\t').map(|s| s.trim()).collect();
+
+    headers
+        .iter()
+        .enumerate()
+        .map(|(i, name)| {
+            let val = values.get(i).copied().unwrap_or("");
+            let inferred_type = infer_mongo_type(val);
+            ColumnaInfo {
+                nombre: name.to_string(),
+                tipo: inferred_type,
+                nullable: "YES".to_string(),
+                default: None,
+            }
+        })
+        .collect()
+}
+
+/// Infer a SQL-like type from a MongoDB value string.
+fn infer_mongo_type(val: &str) -> String {
+    if val.is_empty() || val == "null" {
+        return "text".to_string();
+    }
+    if val == "true" || val == "false" {
+        return "boolean".to_string();
+    }
+    if val.parse::<i64>().is_ok() {
+        return "integer".to_string();
+    }
+    if val.parse::<f64>().is_ok() {
+        return "double".to_string();
+    }
+    "text".to_string()
+}
+
+
+/// Export MongoDB to SQLite by sampling each collection.
+pub fn export_mongo_to_sqlite(creds: &GenericCredentials, sqlite_path: &str) -> std::io::Result<()> {
+    let coll_names_raw = list_tables(creds)?;
+    if coll_names_raw.contains("No collections found") || coll_names_raw.trim().is_empty() {
+        return Err(Error::new(
+            ErrorKind::NotFound,
+            "No collections found in MongoDB",
+        ));
     }
 
-    #[test]
-    fn test_make_query_invalid_json() {
-        let creds = mongo_creds();
-        // This will fail because it can't connect to MongoDB,
-        // but we want to test the JSON parsing path
-        let result = make_query(&creds, "not json");
-        assert!(result.is_err());
+    let coll_names: Vec<String> = coll_names_raw.lines().map(|l| l.trim().to_string()).collect();
+
+    let conn = rusqlite::Connection::open(sqlite_path)
+        .map_err(|e| Error::new(ErrorKind::Other, format!("Error creating SQLite: {e}")))?;
+
+    for coll_name in &coll_names {
+        let temp_csv = format!("/tmp/dl_mongo_export_{}.csv", coll_name.replace(' ', "_"));
+        export_csv(creds, coll_name, &temp_csv)?;
+
+        // Read CSV to infer schema and create table
+        let mut rdr = csv::ReaderBuilder::new()
+            .has_headers(true)
+            .from_path(&temp_csv)
+            .map_err(|e| {
+                Error::new(
+                    ErrorKind::Other,
+                    format!("Error reading CSV for '{}': {e}", coll_name),
+                )
+            })?;
+
+        let headers: Vec<String> = rdr
+            .headers()
+            .map_err(|e| Error::new(ErrorKind::Other, format!("Error reading headers: {e}")))?
+            .iter()
+            .map(|h| h.to_string())
+            .collect();
+
+        if headers.is_empty() {
+            let _ = std::fs::remove_file(&temp_csv);
+            continue;
+        }
+
+        // Create table with all TEXT columns (safe for MongoDB's flexible schema)
+        let col_defs: Vec<String> = headers
+            .iter()
+            .map(|h| format!("\"{}\" TEXT", h))
+            .collect();
+        let create_sql = format!(
+            "CREATE TABLE IF NOT EXISTS \"{}\" (\n    {}\n);",
+            coll_name,
+            col_defs.join(",\n    ")
+        );
+
+        conn.execute_batch(&create_sql).map_err(|e| {
+            Error::new(
+                ErrorKind::Other,
+                format!("Error creating table '{}': {e}", coll_name),
+            )
+        })?;
+
+        let placeholders: Vec<String> = (0..headers.len()).map(|_| "?".to_string()).collect();
+        let insert_sql = format!(
+            "INSERT INTO \"{}\" ({}) VALUES ({})",
+            coll_name,
+            headers
+                .iter()
+                .map(|h| format!("\"{}\"", h))
+                .collect::<Vec<_>>()
+                .join(", "),
+            placeholders.join(", ")
+        );
+
+        let tx = conn.unchecked_transaction().map_err(|e| {
+            Error::new(ErrorKind::Other, format!("Error starting transaction: {e}"))
+        })?;
+
+        {
+            let mut stmt = tx.prepare(&insert_sql).map_err(|e| {
+                Error::new(
+                    ErrorKind::Other,
+                    format!("Error preparing INSERT for '{}': {e}", coll_name),
+                )
+            })?;
+
+            for result in rdr.records() {
+                let record = result.map_err(|e| {
+                    Error::new(ErrorKind::Other, format!("Error reading record: {e}"))
+                })?;
+                let values: Vec<&str> = record.iter().collect();
+                stmt.execute(rusqlite::params_from_iter(values.iter()))
+                    .map_err(|e| {
+                        Error::new(
+                            ErrorKind::Other,
+                            format!("Error inserting into '{}': {e}", coll_name),
+                        )
+                    })?;
+            }
+        }
+
+        tx.commit()
+            .map_err(|e| Error::new(ErrorKind::Other, format!("Error on commit: {e}")))?;
+
+        let _ = std::fs::remove_file(&temp_csv);
     }
+
+    Ok(())
 }

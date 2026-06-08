@@ -72,7 +72,7 @@ pub struct SQLiteTable {
 
 pub struct SQLiteColumn {
     pub name: String,
-    pub sqlite_type: String, // TEXT, INTEGER, REAL, BLOB
+    pub sqlite_type: String, 
     pub nullable: bool,
     pub default: Option<String>,
 }

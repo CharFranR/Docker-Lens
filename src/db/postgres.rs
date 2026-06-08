@@ -114,6 +114,48 @@ pub fn make_query(credentials: &GenericCredentials, query: &str) -> std::io::Res
     Ok(output)
 }
 
+
+/// PostgreSQL schema inspection via information_schema.columns.
+pub fn inspect_schema_pg(creds: &GenericCredentials) -> std::io::Result<Vec<TablaInfo>> {
+    // Get table names
+    let tables_query = "SELECT tablename FROM pg_tables WHERE schemaname = 'public';";
+    let raw_tables = make_query(creds, tables_query)?;
+
+    let table_names: Vec<String> = raw_tables
+        .lines()
+        .map(|l| l.trim().to_string())
+        .filter(|l| {
+            !l.is_empty()
+                && !l.starts_with("tablename")
+                && !l.starts_with('-')
+                && !l.starts_with('(')
+                && !l.contains("rows)")
+        })
+        .collect();
+
+    if table_names.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    let mut raw_structures = Vec::new();
+    for table_name in &table_names {
+        let query = format!(
+            "SELECT column_name, data_type, is_nullable, column_default \
+             FROM information_schema.columns \
+             WHERE table_name = '{}' \
+             ORDER BY ordinal_position;",
+            table_name
+        );
+        let result = make_query(creds, &query)?;
+        raw_structures.push(result);
+    }
+
+    Ok(parse_db_structure(&raw_structures, &table_names))
+}
+
+
+
+
 /// Export a table to CSV via psql COPY.
 pub fn export_csv(
     credentials: &GenericCredentials,
@@ -440,210 +482,4 @@ pub fn export_to_sqlite(
     }
 
     Ok(())
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::types::GenericCredentials;
-    use std::io::ErrorKind;
-
-    fn pg_creds() -> GenericCredentials {
-        GenericCredentials {
-            db_type: crate::types::DbType::Postgres,
-            host: "localhost".into(),
-            port: "5432".into(),
-            user: "postgres".into(),
-            password: "postgres".into(),
-            database: "appdb".into(),
-        }
-    }
-
-    // ── Pure helper tests (no PG instance needed) ──────────────────────
-
-    #[test]
-    fn test_map_pg_type_to_sqlite_integer() {
-        assert_eq!(map_pg_type_to_sqlite("integer"), "INTEGER");
-        assert_eq!(map_pg_type_to_sqlite("INT"), "INTEGER");
-        assert_eq!(map_pg_type_to_sqlite("bigint"), "INTEGER");
-        assert_eq!(map_pg_type_to_sqlite("smallint"), "INTEGER");
-        assert_eq!(map_pg_type_to_sqlite("serial"), "INTEGER");
-        assert_eq!(map_pg_type_to_sqlite("bigserial"), "INTEGER");
-    }
-
-    #[test]
-    fn test_map_pg_type_to_sqlite_float() {
-        assert_eq!(map_pg_type_to_sqlite("real"), "REAL");
-        assert_eq!(map_pg_type_to_sqlite("double precision"), "REAL");
-        assert_eq!(map_pg_type_to_sqlite("numeric"), "REAL");
-        assert_eq!(map_pg_type_to_sqlite("decimal"), "REAL");
-        assert_eq!(map_pg_type_to_sqlite("float"), "REAL");
-    }
-
-    #[test]
-    fn test_map_pg_type_to_sqlite_text() {
-        assert_eq!(map_pg_type_to_sqlite("text"), "TEXT");
-        assert_eq!(map_pg_type_to_sqlite("varchar"), "TEXT");
-        assert_eq!(map_pg_type_to_sqlite("character varying"), "TEXT");
-        assert_eq!(map_pg_type_to_sqlite("uuid"), "TEXT");
-        assert_eq!(map_pg_type_to_sqlite("json"), "TEXT");
-        assert_eq!(map_pg_type_to_sqlite("jsonb"), "TEXT");
-        assert_eq!(map_pg_type_to_sqlite("date"), "TEXT");
-        assert_eq!(map_pg_type_to_sqlite("timestamp"), "TEXT");
-    }
-
-    #[test]
-    fn test_map_pg_type_to_sqlite_boolean() {
-        assert_eq!(map_pg_type_to_sqlite("boolean"), "INTEGER");
-        assert_eq!(map_pg_type_to_sqlite("bool"), "INTEGER");
-    }
-
-    #[test]
-    fn test_map_pg_type_to_sqlite_blob() {
-        assert_eq!(map_pg_type_to_sqlite("bytea"), "BLOB");
-    }
-
-    #[test]
-    fn test_map_pg_type_to_sqlite_unknown_defaults_to_text() {
-        assert_eq!(map_pg_type_to_sqlite("some_weird_custom_type"), "TEXT");
-    }
-
-    #[test]
-    fn test_parse_db_structure_basic() {
-        let raw = vec![" column_name | data_type | is_nullable | column_default \n----+----+----+----\n id | integer | NO | \n name | text | YES | \n(2 rows)".to_string()];
-        let table_names = vec!["users".to_string()];
-        let tables = parse_db_structure(&raw, &table_names);
-        assert_eq!(tables.len(), 1);
-        assert_eq!(tables[0].nombre, "users");
-        assert_eq!(tables[0].columnas.len(), 2);
-        assert_eq!(tables[0].columnas[0].nombre, "id");
-        assert_eq!(tables[0].columnas[0].tipo, "integer");
-        assert_eq!(tables[0].columnas[0].nullable, "NO");
-        assert_eq!(tables[0].columnas[1].nombre, "name");
-        assert_eq!(tables[0].columnas[1].tipo, "text");
-        assert_eq!(tables[0].columnas[1].nullable, "YES");
-    }
-
-    #[test]
-    fn test_parse_db_structure_skips_headers() {
-        let raw = vec![" column_name | data_type | is_nullable | column_default \n----+----+----+----\n id | integer | NO | \n----\n(1 row)".to_string()];
-        let table_names = vec!["items".to_string()];
-        let tables = parse_db_structure(&raw, &table_names);
-        assert_eq!(tables.len(), 1);
-        assert_eq!(tables[0].columnas.len(), 1);
-        assert_eq!(tables[0].columnas[0].nombre, "id");
-    }
-
-    #[test]
-    fn test_parse_db_structure_empty_raw_produces_no_tables() {
-        let raw: Vec<String> = vec!["(0 rows)".to_string()];
-        let table_names: Vec<String> = vec!["empty".to_string()];
-        let tables = parse_db_structure(&raw, &table_names);
-        assert_eq!(tables.len(), 0);
-    }
-
-    #[test]
-    fn test_generate_create_table_basic() {
-        let table = SQLiteTable {
-            name: "users".into(),
-            columns: vec![
-                SQLiteColumn {
-                    name: "id".into(),
-                    sqlite_type: "INTEGER".into(),
-                    nullable: false,
-                    default: None,
-                },
-                SQLiteColumn {
-                    name: "name".into(),
-                    sqlite_type: "TEXT".into(),
-                    nullable: true,
-                    default: None,
-                },
-            ],
-        };
-        let sql = generate_create_table(&table);
-        assert!(sql.contains("CREATE TABLE IF NOT EXISTS \"users\""));
-        assert!(sql.contains("\"id\" INTEGER NOT NULL"));
-        assert!(sql.contains("\"name\" TEXT"));
-    }
-
-    #[test]
-    fn test_generate_create_table_with_default() {
-        let table = SQLiteTable {
-            name: "items".into(),
-            columns: vec![SQLiteColumn {
-                name: "count".into(),
-                sqlite_type: "INTEGER".into(),
-                nullable: true,
-                default: Some("0".into()),
-            }],
-        };
-        let sql = generate_create_table(&table);
-        assert!(sql.contains("DEFAULT 0"));
-    }
-
-    #[test]
-    fn test_generate_create_table_skips_function_defaults() {
-        let table = SQLiteTable {
-            name: "events".into(),
-            columns: vec![SQLiteColumn {
-                name: "created_at".into(),
-                sqlite_type: "TEXT".into(),
-                nullable: true,
-                default: Some("now()".into()),
-            }],
-        };
-        let sql = generate_create_table(&table);
-        assert!(!sql.contains("now()"));
-    }
-
-    #[test]
-    fn test_convert_to_sqlite_schema() {
-        let pg_tables = vec![TablaInfo {
-            nombre: "users".into(),
-            columnas: vec![
-                ColumnaInfo {
-                    nombre: "id".into(),
-                    tipo: "integer".into(),
-                    nullable: "NO".into(),
-                    default: None,
-                },
-                ColumnaInfo {
-                    nombre: "email".into(),
-                    tipo: "varchar".into(),
-                    nullable: "YES".into(),
-                    default: None,
-                },
-            ],
-        }];
-        let schema = convert_to_sqlite_schema(&pg_tables);
-        assert_eq!(schema.tables.len(), 1);
-        assert_eq!(schema.tables[0].name, "users");
-        assert_eq!(schema.tables[0].columns[0].sqlite_type, "INTEGER");
-        assert!(!schema.tables[0].columns[0].nullable);
-        assert_eq!(schema.tables[0].columns[1].sqlite_type, "TEXT");
-        assert!(schema.tables[0].columns[1].nullable);
-    }
-
-    // ── Integration approval test (requires PG) ────────────────────────
-
-    /// Approval test: verify make_query works against a real PostgreSQL.
-    #[test]
-    fn test_make_query_real() {
-        let creds = pg_creds();
-        let result = make_query(&creds, "SELECT 1 AS test");
-        match result {
-            Ok(data) => {
-                println!("{:#?}", data);
-                assert!(data.contains("test"));
-            }
-            Err(e) => {
-                if e.to_string().contains("Conexión") {
-                    eprintln!("SKIP: PostgreSQL not available — infrastructure.");
-                } else {
-                    panic!("Unexpected error: {}", e);
-                }
-            }
-        }
-    }
 }

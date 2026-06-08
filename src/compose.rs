@@ -9,10 +9,10 @@ pub struct DockerCompose {
 
 #[derive(Debug, Deserialize)]
 pub struct Service {
-    pub container_name: Option<String>,
+    // pub container_name: Option<String>,
     pub image: Option<String>,
     pub ports: Option<Vec<String>>,
-    pub volumes: Option<Vec<String>>,
+    // pub volumes: Option<Vec<String>>,
     pub environment: Option<serde_yaml::Value>,
     pub depends_on: Option<serde_yaml::Value>, // Usamos Value porque puede ser lista o mapa
 }

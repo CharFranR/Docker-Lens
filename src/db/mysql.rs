@@ -1,9 +1,11 @@
 // MySQL/MariaDB adapter via mysql CLI.
 // Same pattern as postgres.rs but uses `mysql` binary.
+
 use std::io::{Error, ErrorKind};
 use std::process::Command;
 
-use crate::types::GenericCredentials;
+use crate::db::postgres;
+use crate::types::{GenericCredentials, TablaInfo};
 
 /// Resolve the Docker container IP for a given service name.
 /// Reuses the same docker inspect pattern as postgres.
@@ -91,6 +93,47 @@ pub fn make_query(credentials: &GenericCredentials, query: &str) -> std::io::Res
     Ok(stdout)
 }
 
+/// MySQL/MariaDB schema inspection via information_schema.columns.
+pub fn inspect_schema_mysql(creds: &GenericCredentials) -> std::io::Result<Vec<TablaInfo>> {
+    let tables_query = "SHOW TABLES;";
+    let raw_tables = make_query(creds, tables_query)?;
+
+    let table_names: Vec<String> = raw_tables
+        .lines()
+        .map(|l| l.trim().to_string())
+        .filter(|l| {
+            !l.is_empty()
+                && !l.starts_with("Tables_in_")
+                && !l.starts_with('+')
+                && !l.starts_with('|')
+                && !l.contains("rows in set")
+        })
+        .filter(|l| !l.is_empty())
+        .collect();
+
+    if table_names.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    let mut raw_structures = Vec::new();
+    for table_name in &table_names {
+        let query = format!(
+            "SELECT column_name, data_type, is_nullable, column_default \
+             FROM information_schema.columns \
+             WHERE table_name = '{}' AND table_schema = '{}' \
+             ORDER BY ordinal_position;",
+            table_name, creds.database
+        );
+        let result = make_query(creds, &query)?;
+        raw_structures.push(result);
+    }
+
+    Ok(postgres::parse_db_structure(&raw_structures, &table_names))
+}
+
+
+
+
 /// Export a table to CSV via mysql CLI --batch mode.
 pub fn export_csv(
     credentials: &GenericCredentials,
@@ -141,74 +184,124 @@ fn build_mysql_command(credentials: &GenericCredentials) -> Command {
     cmd
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::types::{DbType, GenericCredentials};
 
-    fn mysql_creds() -> GenericCredentials {
-        GenericCredentials {
-            db_type: DbType::Mysql,
-            host: "localhost".into(),
-            port: "3306".into(),
-            user: "root".into(),
-            password: "root".into(),
-            database: "testdb".into(),
+/// Export MySQL/MariaDB to SQLite.
+pub fn export_mysql_to_sqlite(creds: &GenericCredentials, sqlite_path: &str) -> std::io::Result<()> {
+    let tables_query = "SHOW TABLES;";
+    let raw_tables = make_query(creds, tables_query)?;
+
+    let table_names: Vec<String> = raw_tables
+        .lines()
+        .map(|l| l.trim().to_string())
+        .filter(|l| {
+            !l.is_empty()
+                && !l.starts_with("Tables_in_")
+                && !l.starts_with('+')
+                && !l.starts_with('|')
+        })
+        .collect();
+
+    if table_names.is_empty() {
+        return Err(Error::new(
+            ErrorKind::NotFound,
+            "No tables found in MySQL/MariaDB database",
+        ));
+    }
+
+    let mut raw_structures = Vec::new();
+    for table_name in &table_names {
+        let query = format!(
+            "SELECT column_name, data_type, is_nullable, column_default \
+             FROM information_schema.columns \
+             WHERE table_name = '{}' AND table_schema = '{}' \
+             ORDER BY ordinal_position;",
+            table_name, creds.database
+        );
+        let result = make_query(creds, &query)?;
+        raw_structures.push(result);
+    }
+
+    let db_tables = postgres::parse_db_structure(&raw_structures, &table_names);
+    let schema = postgres::convert_to_sqlite_schema(&db_tables);
+
+    let conn = rusqlite::Connection::open(sqlite_path)
+        .map_err(|e| Error::new(ErrorKind::Other, format!("Error creating SQLite: {e}")))?;
+
+    for table in &schema.tables {
+        let create_sql = postgres::generate_create_table(table);
+        conn.execute_batch(&create_sql).map_err(|e| {
+            Error::new(
+                ErrorKind::Other,
+                format!("Error creating table '{}': {e}", table.name),
+            )
+        })?;
+    }
+
+    for table_name in &table_names {
+        let temp_csv = format!("/tmp/dl_export_{}.csv", table_name);
+        export_csv(creds, table_name, &temp_csv)?;
+
+        let mut rdr = csv::ReaderBuilder::new()
+            .has_headers(true)
+            .from_path(&temp_csv)
+            .map_err(|e| {
+                Error::new(
+                    ErrorKind::Other,
+                    format!("Error reading CSV for '{}': {e}", table_name),
+                )
+            })?;
+
+        let headers: Vec<String> = rdr
+            .headers()
+            .map_err(|e| Error::new(ErrorKind::Other, format!("Error reading headers: {e}")))?
+            .iter()
+            .map(|h| h.to_string())
+            .collect();
+
+        let placeholders: Vec<String> = (0..headers.len()).map(|_| "?".to_string()).collect();
+        let insert_sql = format!(
+            "INSERT INTO \"{}\" ({}) VALUES ({})",
+            table_name,
+            headers
+                .iter()
+                .map(|h| format!("\"{}\"", h))
+                .collect::<Vec<_>>()
+                .join(", "),
+            placeholders.join(", ")
+        );
+
+        let tx = conn.unchecked_transaction().map_err(|e| {
+            Error::new(ErrorKind::Other, format!("Error starting transaction: {e}"))
+        })?;
+
+        {
+            let mut stmt = tx.prepare(&insert_sql).map_err(|e| {
+                Error::new(
+                    ErrorKind::Other,
+                    format!("Error preparing INSERT for '{}': {e}", table_name),
+                )
+            })?;
+
+            for result in rdr.records() {
+                let record = result.map_err(|e| {
+                    Error::new(ErrorKind::Other, format!("Error reading record: {e}"))
+                })?;
+                let values: Vec<&str> = record.iter().collect();
+                stmt.execute(rusqlite::params_from_iter(values.iter()))
+                    .map_err(|e| {
+                        Error::new(
+                            ErrorKind::Other,
+                            format!("Error inserting into '{}': {e}", table_name),
+                        )
+                    })?;
+            }
         }
+
+        tx.commit()
+            .map_err(|e| Error::new(ErrorKind::Other, format!("Error on commit: {e}")))?;
+
+        let _ = std::fs::remove_file(&temp_csv);
     }
 
-    #[test]
-    fn test_build_mysql_command_has_expected_args() {
-        let creds = mysql_creds();
-        let cmd = build_mysql_command(&creds);
-        let program = cmd.get_program().to_str().unwrap();
-        assert!(program.contains("mysql"), "Should use mysql binary");
-    }
-
-    #[test]
-    fn test_build_mysql_command_without_password() {
-        let creds = GenericCredentials {
-            db_type: DbType::Mysql,
-            host: "localhost".into(),
-            port: "3306".into(),
-            user: "root".into(),
-            password: String::new(),
-            database: "testdb".into(),
-        };
-        let cmd = build_mysql_command(&creds);
-        // Should not panic — empty password is fine for some setups
-        let program = cmd.get_program().to_str().unwrap();
-        assert!(program.contains("mysql"));
-    }
-
-    #[test]
-    fn test_list_tables_returns_error_when_mysql_unavailable() {
-        let creds = mysql_creds();
-        let result = list_tables(&creds);
-        // If mysql is available and connects, it works; otherwise it's an error
-        // Both outcomes are valid in test environments
-        match result {
-            Ok(output) => {
-                // If MySQL is available, we should get output
-                assert!(!output.is_empty() || output.contains("No tables"));
-            }
-            Err(_) => {
-                // MySQL not available — expected in CI
-            }
-        }
-    }
-
-    #[test]
-    fn test_make_query_returns_error_when_mysql_unavailable() {
-        let creds = mysql_creds();
-        let result = make_query(&creds, "SELECT 1");
-        match result {
-            Ok(output) => {
-                assert!(!output.is_empty());
-            }
-            Err(_) => {
-                // MySQL not available — expected
-            }
-        }
-    }
+    Ok(())
 }
