@@ -182,7 +182,29 @@ def export_sqlite(output, path):
         click.echo("No fue posible realizar la exportacion", err=True)
 
 
-@cli.command()
+# Funciones de la interfaz:
+
+@cli.command(help="Muestra el comando para conectarte a la base de datos")
+@click.argument("path")
+def connect(path):
+
+    if path == ".":
+        path = os.getcwd()
+
+    try:
+        base_path = docker_lens.find_orchestrator_py(path)
+        creds = docker_lens.find_db_py(base_path)
+    except RuntimeError:
+        click.echo("Base de datos inaccesible", err=True)
+        return  
+
+    engine = get_engine(creds["db_type"])
+    
+    result = engine.connect_command(creds["port"], creds["user"], creds["database"])
+
+    click.echo(result)
+
+@cli.command(help="Abre una sesión interactiva con la DB")
 @click.argument("path")
 def shell(path):
 
@@ -201,9 +223,6 @@ def shell(path):
     env = engine.shell_env(creds["password"])
 
     subprocess.call(args, env=env)
-
-
-# Funciones de la interfaz:
 
 @cli.command(help="Muestra las primeras N filas de una tabla")
 @click.argument("table_name")
