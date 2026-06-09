@@ -1,6 +1,6 @@
 # Docker-Lens
 
-Accedé a tu base de datos desde el terminal. Docker-Lens detecta automáticamente qué DB tenés en tu `docker-compose.yml` y te conecta al instante.
+Accede a tu base de datos desde el terminal. Docker-Lens detecta automáticamente qué DB tienes en tu `docker-compose.yml` y te conecta al instante.
 
 ## Instalación
 
