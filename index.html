@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Docker-Lens — Accedé a tu DB desde el terminal</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Inter:wght@400;500;600;700&display=swap');
+        body { font-family: 'Inter', sans-serif; }
+        code, .font-mono { font-family: 'JetBrains Mono', monospace; }
+        .gradient-text {
+            background: linear-gradient(135deg, #3b82f6 0%, #8b5cf6 50%, #ec4899 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        .terminal-card {
+            background: linear-gradient(145deg, #1e293b 0%, #0f172a 100%);
+        }
+        .glow-blue { box-shadow: 0 0 40px rgba(59, 130, 246, 0.15); }
+        .glow-purple { box-shadow: 0 0 40px rgba(139, 92, 246, 0.15); }
+    </style>
+</head>
+<body class="bg-gray-950 text-gray-100">
+
+    <!-- Hero -->
+    <div class="min-h-screen flex flex-col items-center justify-center px-6 text-center relative overflow-hidden">
+        <!-- Background glow -->
+        <div class="absolute top-1/4 left-1/2 -translate-x-1/2 w-[600px] h-[600px] bg-blue-500/10 rounded-full blur-[128px]"></div>
+        <div class="absolute top-1/3 left-1/3 w-[400px] h-[400px] bg-purple-500/10 rounded-full blur-[100px]"></div>
+
+        <div class="relative z-10">
+            <!-- Logo / icon -->
+            <div class="mb-8 inline-flex items-center justify-center w-20 h-20 rounded-2xl bg-gray-800/80 border border-gray-700/50 glow-blue">
+                <svg class="w-10 h-10 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
+                </svg>
+            </div>
+
+            <h1 class="text-5xl md:text-7xl font-bold tracking-tight mb-6">
+                <span class="gradient-text">Docker-Lens</span>
+            </h1>
+
+            <p class="text-xl md:text-2xl text-gray-400 max-w-2xl mx-auto mb-10 leading-relaxed">
+                Accede a tu base de datos desde el terminal.<br>
+                <span class="text-gray-500">Sin configuración, sin complicaciones.</span>
+            </p>
+
+            <!-- Install command -->
+            <div class="inline-flex items-center gap-3 bg-gray-800/80 border border-gray-700/50 rounded-xl px-6 py-3 mb-8 glow-purple">
+                <span class="text-gray-500 text-sm">$</span>
+                <code class="text-lg font-mono text-green-400">pip install docker-lens</code>
+                <button onclick="navigator.clipboard.writeText('pip install dlens-py')" class="ml-2 text-gray-500 hover:text-gray-300 transition" title="Copiar">
+                    <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M15.666 3.888A2.25 2.25 0 0013.5 2.25h-3c-1.03 0-1.9.693-2.166 1.638m7.332 0c.055.194.084.4.084.612v0a.75.75 0 01-.75.75H9.75a.75.75 0 01-.75-.75v0c0-.212.03-.418.084-.612m7.332 0c.646.049 1.288.11 1.927.184 1.1.128 1.907 1.077 1.907 2.185V19.5a2.25 2.25 0 01-2.25 2.25H6.75A2.25 2.25 0 014.5 19.5V6.257c0-1.108.806-2.057 1.907-2.185a48.208 48.208 0 011.927-.184" />
+                    </svg>
+                </button>
+            </div>
+
+            <div class="flex flex-wrap justify-center gap-4 text-sm">
+                <a href="https://github.com/CharFranR/Docker-Lens" class="inline-flex items-center gap-2 bg-gray-800/60 border border-gray-700/50 rounded-lg px-5 py-2.5 hover:bg-gray-800 transition">
+                    <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/></svg>
+                    GitHub
+                </a>
+                <span class="inline-flex items-center gap-2 bg-gray-800/60 border border-gray-700/50 rounded-lg px-5 py-2.5 text-gray-400">
+                    <span class="w-2 h-2 bg-green-400 rounded-full"></span>
+                    v0.1.0
+                </span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Features -->
+    <div class="max-w-6xl mx-auto px-6 py-24">
+        <h2 class="text-3xl font-bold text-center mb-4">Un comando. Todas las bases.</h2>
+        <p class="text-gray-500 text-center mb-16 max-w-xl mx-auto">Docker-Lens detecta automáticamente qué DB tienes en tu docker-compose.yml. No necesitas configurar nada.</p>
+
+        <div class="grid md:grid-cols-3 gap-6">
+            <!-- Feature 1 -->
+            <div class="bg-gray-900/50 border border-gray-800/50 rounded-2xl p-6 hover:border-blue-500/30 transition">
+                <div class="w-10 h-10 bg-blue-500/10 rounded-lg flex items-center justify-center mb-4">
+                    <svg class="w-5 h-5 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09z" />
+                    </svg>
+                </div>
+                <h3 class="text-lg font-semibold mb-2">Detección automática</h3>
+                <p class="text-gray-400 text-sm">Analiza tu docker-compose.yml y encuentra la DB en segundos. PostgreSQL, MySQL, MariaDB, MongoDB, SQLite.</p>
+            </div>
+
+            <!-- Feature 2 -->
+            <div class="bg-gray-900/50 border border-gray-800/50 rounded-2xl p-6 hover:border-purple-500/30 transition">
+                <div class="w-10 h-10 bg-purple-500/10 rounded-lg flex items-center justify-center mb-4">
+                    <svg class="w-5 h-5 text-purple-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M6.75 7.5l3 2.25-3 2.25m4.5 0h3m-9 8.25h13.5A2.25 2.25 0 0021 18V6a2.25 2.25 0 00-2.25-2.25H5.25A2.25 2.25 0 003 6v12a2.25 2.25 0 002.25 2.25z" />
+                    </svg>
+                </div>
+                <h3 class="text-lg font-semibold mb-2">Queries desde la terminal</h3>
+                <p class="text-gray-400 text-sm">Ejecuta SQL o MongoDB queries directamente desde la CLI. Sin abrir otro cliente, sin cambiar de ventana.</p>
+            </div>
+
+            <!-- Feature 3 -->
+            <div class="bg-gray-900/50 border border-gray-800/50 rounded-2xl p-6 hover:border-green-500/30 transition">
+                <div class="w-10 h-10 bg-green-500/10 rounded-lg flex items-center justify-center mb-4">
+                    <svg class="w-5 h-5 text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
+                    </svg>
+                </div>
+                <h3 class="text-lg font-semibold mb-2">Exportación</h3>
+                <p class="text-gray-400 text-sm">Exporta tablas a CSV o migrá toda la base a SQLite con un solo comando. Ideal para backups y análisis.</p>
+            </div>
+
+            <!-- Feature 4 -->
+            <div class="bg-gray-900/50 border border-gray-800/50 rounded-2xl p-6 hover:border-amber-500/30 transition">
+                <div class="w-10 h-10 bg-amber-500/10 rounded-lg flex items-center justify-center mb-4">
+                    <svg class="w-5 h-5 text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
+                    </svg>
+                </div>
+                <h3 class="text-lg font-semibold mb-2">Schema inspection</h3>
+                <p class="text-gray-400 text-sm">Ve columnas, tipos y constraints de cualquier tabla. Conoce tu estructura sin abrir el cliente de la DB.</p>
+            </div>
+
+            <!-- Feature 5 -->
+            <div class="bg-gray-900/50 border border-gray-800/50 rounded-2xl p-6 hover:border-rose-500/30 transition">
+                <div class="w-10 h-10 bg-rose-500/10 rounded-lg flex items-center justify-center mb-4">
+                    <svg class="w-5 h-5 text-rose-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M5.25 5.653c0-.856.917-1.398 1.667-.986l11.54 6.348a1.125 1.125 0 010 1.971l-11.54 6.347a1.125 1.125 0 01-1.667-.985V5.653z" />
+                    </svg>
+                </div>
+                <h3 class="text-lg font-semibold mb-2">Shell interactivo</h3>
+                <p class="text-gray-400 text-sm">Abre una sesión interactiva con tu DB directamente desde Docker-Lens. psql, mysql, mongosh — el que necesites.</p>
+            </div>
+
+            <!-- Feature 6 -->
+            <div class="bg-gray-900/50 border border-gray-800/50 rounded-2xl p-6 hover:border-cyan-500/30 transition">
+                <div class="w-10 h-10 bg-cyan-500/10 rounded-lg flex items-center justify-center mb-4">
+                    <svg class="w-5 h-5 text-cyan-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 13.5l10.5-11.25L12 10.5h8.25L9.75 21.75 12 13.5H3.75z" />
+                    </svg>
+                </div>
+                <h3 class="text-lg font-semibold mb-2">Rust core</h3>
+                <p class="text-gray-400 text-sm">El motor de detección y conexión está escrito en Rust con PyO3. Rápido, sin dependencias del sistema, bundleado.</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Demo terminal -->
+    <div class="max-w-4xl mx-auto px-6 pb-24">
+        <div class="terminal-card rounded-2xl border border-gray-700/50 overflow-hidden glow-blue">
+            <!-- Terminal header -->
+            <div class="flex items-center gap-2 px-4 py-3 bg-gray-800/50 border-b border-gray-700/50">
+                <div class="w-3 h-3 rounded-full bg-red-500/80"></div>
+                <div class="w-3 h-3 rounded-full bg-yellow-500/80"></div>
+                <div class="w-3 h-3 rounded-full bg-green-500/80"></div>
+                <span class="text-gray-500 text-xs ml-2 font-mono">terminal</span>
+            </div>
+            <!-- Terminal content -->
+            <div class="p-6 font-mono text-sm leading-relaxed">
+                <p class="text-gray-500">$ docker-lens info .</p>
+                <p class="text-green-400 mb-4">{'db_type': 'postgres', 'host': 'localhost', 'port': '5432', 'user': 'app_user', 'database': 'mydb'}</p>
+
+                <p class="text-gray-500">$ docker-lens tables .</p>
+                <p class="text-blue-300 mb-4">usuarios<br>productos<br>pedidos<br>logs</p>
+
+                <p class="text-gray-500">$ docker-lens head usuarios . -n 3</p>
+                <p class="text-gray-300 mb-4">id  | nombre     | email<br>---+-----------+----------------<br> 1  | Ana García | ana@mail.com<br> 2  | Juan Pérez | juan@mail.com<br> 3  | María López| maria@mail.com</p>
+
+                <p class="text-gray-500">$ docker-lens export-csv usuarios . -o usuarios.csv</p>
+                <p class="text-green-400">Exportado correctamente en usuarios.csv</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- CTA -->
+    <div class="text-center pb-24 px-6">
+        <h2 class="text-3xl font-bold mb-4">¿Listo?</h2>
+        <p class="text-gray-500 mb-8">Mira tu base de datos en 10 segundos.</p>
+        <a href="https://github.com/CharFranR/Docker-Lens" class="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-500 text-white font-medium rounded-lg px-6 py-3 transition">
+            <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/></svg>
+            Ver en GitHub
+        </a>
+    </div>
+
+    <!-- Footer -->
+    <footer class="border-t border-gray-800/50 py-8 text-center text-gray-600 text-sm">
+        <p>Docker-Lens &middot; <a href="https://github.com/CharFranR/Docker-Lens" class="hover:text-gray-400 transition">GitHub</a> &middot; MIT License</p>
+    </footer>
+
+</body>
+</html>
