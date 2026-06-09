@@ -36,19 +36,6 @@ fn build_uri(creds: &GenericCredentials) -> String {
     }
 }
 
-// /// Connect to MongoDB synchronously using an internal tokio runtime.
-// fn connect(creds: &GenericCredentials) -> std::io::Result<Client> {
-//     let uri = build_uri(creds);
-//     let rt = tokio::runtime::Runtime::new()
-//         .map_err(|e| Error::new(ErrorKind::Other, format!("Tokio runtime: {e}")))?;
-
-//     rt.block_on(async {
-//         Client::with_uri_str(&uri)
-//             .await
-//             .map_err(|e| Error::new(ErrorKind::Other, format!("MongoDB connect: {e}")))
-//     })
-// }
-
 /// Get the database name from credentials.
 fn db_name(creds: &GenericCredentials) -> &str {
     if creds.database.is_empty() {

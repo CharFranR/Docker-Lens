@@ -18,16 +18,28 @@ pub fn get_container_ip(service_name: &str) -> Option<String> {
     let sn = service_name.to_string();
 
     rt.block_on(async {
-        let docker = connect().ok()?;
+        let docker = match connect() {
+            Ok(d) => d,
+            Err(e) => {
+                eprintln!("Warning: {e}");
+                return None;
+            }
+        };
 
-        let containers = docker
+        let containers = match docker
             .list_containers(Some(
                 ListContainersOptionsBuilder::default()
                     .all(true)
                     .build(),
             ))
             .await
-            .ok()?;
+        {
+            Ok(c) => c,
+            Err(e) => {
+                eprintln!("Warning: Docker list_containers: {e}");
+                return None;
+            }
+        };
 
         // Find the container whose name matches the service
         let container = containers.iter().find(|c| {
@@ -41,8 +53,13 @@ pub fn get_container_ip(service_name: &str) -> Option<String> {
 
         let id = container.id.as_deref()?;
 
-        // Inspect the container to get network settings
-        let inspect = docker.inspect_container(id, None).await.ok()?;
+        let inspect = match docker.inspect_container(id, None).await {
+            Ok(i) => i,
+            Err(e) => {
+                eprintln!("Warning: Docker inspect_container: {e}");
+                return None;
+            }
+        };
 
         // Extract IP from the first network
         let networks = inspect.network_settings?.networks?;

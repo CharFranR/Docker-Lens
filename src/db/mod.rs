@@ -41,7 +41,7 @@ pub fn export_csv(creds: &GenericCredentials, table: &str, path: &str) -> std::i
 }
 
 /// Get the Docker container IP for a given service name.
-/// Only works for Postgres, MySQL, and MariaDB (CLI-based adapters).
+/// Uses bollard to query the Docker daemon directly.
 /// Returns None for SQLite (file-based) and MongoDB (crate-based).
 pub fn get_container_ip(creds: &GenericCredentials, service_name: &str) -> Option<String> {
     match creds.db_type {
