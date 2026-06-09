@@ -1,20 +1,46 @@
-use pyo3::prelude::*;
 use pyo3::exceptions::PyRuntimeError;
+use pyo3::prelude::*;
 use pyo3::types::PyDict;
 use std::path::{Path, PathBuf};
 
-mod scanner;
-mod heuristic;
 mod compose;
-mod psql;
+mod db;
+mod heuristic;
+mod scanner;
 mod types;
 
+use crate::db::{credentials_from_compose, export_to_sqlite};
 use crate::scanner::find_container_orchestrator;
-use crate::heuristic::find_db_service;
-use crate::psql::{list_tables, make_query, export_csv};
-
+use crate::types::{DbType, GenericCredentials};
 
 // Wrappers marca chapi, esta como peluda la libreria Py03
+
+fn extract_str(dict: &Bound<'_, PyDict>, key: &str) -> PyResult<String> {
+    dict.get_item(key)?
+        .ok_or_else(|| PyRuntimeError::new_err(format!("Missing key: {key}")))?
+        .extract()
+}
+
+
+fn dict_to_creds(dict: &Bound<'_, PyDict>) -> PyResult<GenericCredentials> {
+    let db_type_str: String = extract_str(dict, "db_type")?;
+    let db_type = match db_type_str.as_str() {
+        "postgres" => types::DbType::Postgres,
+        "mysql" => types::DbType::Mysql,
+        "mariadb" => types::DbType::Mariadb,
+        "sqlite" => types::DbType::Sqlite,
+        "mongo" => types::DbType::Mongo,
+        other => return Err(PyRuntimeError::new_err(format!("Unknown db_type: {other}"))),
+    };
+    Ok(GenericCredentials {
+        db_type,
+        host: extract_str(dict, "host")?,
+        port: extract_str(dict, "port")?,
+        user: extract_str(dict, "user")?,
+        password: extract_str(dict, "password")?,
+        database: extract_str(dict, "database")?,
+    })
+}
 
 #[pyfunction]
 fn find_orchestrator_py(file_path: String) -> PyResult<String> {
@@ -28,63 +54,90 @@ fn find_orchestrator_py(file_path: String) -> PyResult<String> {
 #[pyfunction]
 fn find_db_py(py: Python<'_>, file_path: String) -> PyResult<Bound<'_, PyDict>> {
     let path = PathBuf::from(&file_path);
-    let data = find_db_service(&path)
-        .map_err(|e| PyRuntimeError::new_err(format!("{}", e)))?;
+    let creds = credentials_from_compose(&path).map_err(|e| PyRuntimeError::new_err(format!("{}", e)))?;
+
+    let db_type_str = match creds.db_type {
+        DbType::Postgres => "postgres",
+        DbType::Mysql => "mysql",
+        DbType::Mariadb => "mariadb",
+        DbType::Sqlite => "sqlite",
+        DbType::Mongo => "mongo",
+    };
+
     let dict = PyDict::new(py);
-    dict.set_item("port", &data.port)?;
-    dict.set_item("postgres_user", &data.postgres_user)?;
-    dict.set_item("postgres_password", &data.postgres_password)?;
-    dict.set_item("postgres_db", &data.postgres_db)?;
+    dict.set_item("db_type", db_type_str)?;
+    dict.set_item("host", &creds.host)?;
+    dict.set_item("port", &creds.port)?;
+    dict.set_item("user", &creds.user)?;
+    dict.set_item("password", &creds.password)?;
+    dict.set_item("database", &creds.database)?;
     Ok(dict)
 }
 
 #[pyfunction]
 fn list_tables_py(credenciales: &Bound<'_, PyDict>) -> PyResult<String> {
-    let port = credenciales.get_item("port")?.ok_or_else(|| PyRuntimeError::new_err("Missing key: port"))?.extract()?;
-    let user = credenciales.get_item("postgres_user")?.ok_or_else(|| PyRuntimeError::new_err("Missing key: port"))?.extract()?;
-    let password = credenciales.get_item("postgres_password")?.ok_or_else(|| PyRuntimeError::new_err("Missing key: port"))?.extract()?;
-    let db = credenciales.get_item("postgres_db")?.ok_or_else(|| PyRuntimeError::new_err("Missing key: port"))?.extract()?;
-    let credentials = types::DbData {
-        port,
-        postgres_user: user,
-        postgres_password: password,
-        postgres_db: db,
-    };
-    list_tables(&credentials)
-        .map_err(|e| PyRuntimeError::new_err(format!("{}", e)))
+    let creds = dict_to_creds(credenciales)?;
+    crate::db::list_tables(&creds).map_err(|e| PyRuntimeError::new_err(format!("{}", e)))
 }
-
 
 #[pyfunction]
 fn make_query_py(credenciales: &Bound<'_, PyDict>, query: String) -> PyResult<String> {
-    let port = credenciales.get_item("port")?.ok_or_else(|| PyRuntimeError::new_err("Missing key: port"))?.extract()?;
-    let user = credenciales.get_item("postgres_user")?.ok_or_else(|| PyRuntimeError::new_err("Missing key: postgres_user"))?.extract()?;
-    let password = credenciales.get_item("postgres_password")?.ok_or_else(|| PyRuntimeError::new_err("Missing key: postgres_password"))?.extract()?;
-    let db = credenciales.get_item("postgres_db")?.ok_or_else(|| PyRuntimeError::new_err("Missing key: postgres_db"))?.extract()?;
-    let credentials = types::DbData {
-        port,
-        postgres_user: user,
-        postgres_password: password,
-        postgres_db: db,
-    };
-    make_query(&credentials, &query)
+    let creds = dict_to_creds(credenciales)?;
+    crate::db::make_query(&creds, &query).map_err(|e| PyRuntimeError::new_err(format!("{}", e)))
+}
+
+#[pyfunction]
+fn export_csv_py(
+    credenciales: &Bound<'_, PyDict>,
+    table_name: String,
+    file_path: String,
+) -> PyResult<()> {
+    let creds = dict_to_creds(credenciales)?;
+    crate::db::export_csv(&creds, &table_name, &file_path)
         .map_err(|e| PyRuntimeError::new_err(format!("{}", e)))
 }
 
 #[pyfunction]
-fn export_csv_py(credenciales: &Bound<'_, PyDict>, table_name: String, file_path: String) -> PyResult<()> {
-    let port = credenciales.get_item("port")?.ok_or_else(|| PyRuntimeError::new_err("Missing key: port"))?.extract()?;
-    let user = credenciales.get_item("postgres_user")?.ok_or_else(|| PyRuntimeError::new_err("Missing key: postgres_user"))?.extract()?;
-    let password = credenciales.get_item("postgres_password")?.ok_or_else(|| PyRuntimeError::new_err("Missing key: postgres_password"))?.extract()?;
-    let db = credenciales.get_item("postgres_db")?.ok_or_else(|| PyRuntimeError::new_err("Missing key: postgres_db"))?.extract()?;
-    let credentials = types::DbData {
-        port,
-        postgres_user: user,
-        postgres_password: password,
-        postgres_db: db,
-    };
-    export_csv(&credentials, &table_name, &file_path)
-        .map_err(|e| PyRuntimeError::new_err(format!("{}", e)))
+fn export_to_sqlite_py(credenciales: &Bound<'_, PyDict>, sqlite_path: String) -> PyResult<()> {
+    let creds = dict_to_creds(credenciales)?;
+    export_to_sqlite(&creds, &sqlite_path).map_err(|e| PyRuntimeError::new_err(format!("{}", e)))
+}
+
+#[pyfunction]
+fn inspect_schema_py(py: Python<'_>, credenciales: &Bound<'_, PyDict>) -> PyResult<Vec<Py<PyAny>>> {
+    let creds = dict_to_creds(credenciales)?;
+    let tables = crate::db::inspect_schema(&creds)
+        .map_err(|e| PyRuntimeError::new_err(format!("{}", e)))?;
+
+    let result: Vec<Py<PyAny>> = tables
+        .iter()
+        .map(|t| -> PyResult<Py<PyAny>> {
+            let dict = PyDict::new(py);
+            dict.set_item("name", &t.nombre)?;
+            let columns: Vec<Py<PyAny>> = t
+                .columnas
+                .iter()
+                .map(|c| -> PyResult<Py<PyAny>> {
+                    let col_dict = PyDict::new(py);
+                    col_dict.set_item("name", &c.nombre)?;
+                    col_dict.set_item("type", &c.tipo)?;
+                    col_dict.set_item("nullable", &c.nullable)?;
+                    col_dict.set_item("default", &c.default)?;
+                    Ok(col_dict.into_any().unbind())
+                })
+                .collect::<PyResult<Vec<_>>>()?;
+            dict.set_item("columns", columns)?;
+            Ok(dict.into_any().unbind())
+        })
+        .collect::<PyResult<Vec<_>>>()?;
+
+    Ok(result)
+}
+
+#[pyfunction]
+fn get_container_ip_py(credenciales: &Bound<'_, PyDict>, service_name: String) -> PyResult<Option<String>> {
+    let creds = dict_to_creds(credenciales)?;
+    Ok(crate::db::get_container_ip(&creds, &service_name))
 }
 
 #[pymodule]
@@ -94,5 +147,8 @@ fn docker_lens(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(list_tables_py, m)?)?;
     m.add_function(wrap_pyfunction!(make_query_py, m)?)?;
     m.add_function(wrap_pyfunction!(export_csv_py, m)?)?;
+    m.add_function(wrap_pyfunction!(export_to_sqlite_py, m)?)?;
+    m.add_function(wrap_pyfunction!(inspect_schema_py, m)?)?;
+    m.add_function(wrap_pyfunction!(get_container_ip_py, m)?)?;
     Ok(())
 }
