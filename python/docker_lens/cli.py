@@ -8,6 +8,7 @@ from .postgres_cli import PostgresEngine
 from .mongo_cli import MongoEngine
 from .mysql_cli import MysqlEngine
 from .sqlite_cli import SqliteEngine
+from .validators import sanitize_table_name
 
 ENGINES = {
     "postgres": PostgresEngine,
@@ -105,6 +106,12 @@ def query(query, path):
 @click.argument("path")
 def export_csv(table_name, output, path):
    
+    try:
+        table_name = sanitize_table_name(table_name)
+    except ValueError as e:
+        click.echo(str(e), err=True)
+        return
+
     if path == ".":
         path = os.getcwd()
 
