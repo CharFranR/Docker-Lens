@@ -28,7 +28,7 @@ def cli():
     pass
 
 
-@cli.command(help="Muestra las credenciales de la base de datos")
+@cli.command(help="Muestra las credenciales de la base de datos\n\nUso: docker-lens info PATH")
 @click.argument("path", required=True)
 def info(path):
     # docker-lens info [path]
@@ -49,7 +49,7 @@ def info(path):
         click.echo("Base de datos inaccesible", err=True)
 
 
-@cli.command(help="Cuenta todas las tablas de la base de datos")
+@cli.command(help="Cuenta todas las tablas de la base de datos\n\nUso: docker-lens tables PATH")
 @click.argument("path", required=True)
 def tables(path):
     # docker-lens tables [path]
@@ -73,7 +73,7 @@ def tables(path):
         click.echo("Base de datos inaccesible", err=True)
 
 
-@cli.command(help="Ejecuta una consulta SQL custom")
+@cli.command(help="Ejecuta una consulta SQL custom\n\nUso: docker-lens query 'SELECT * FROM tabla' PATH")
 @click.argument("query", required = True)
 @click.argument("path", required = True)
 
@@ -99,7 +99,7 @@ def query(query, path):
         click.echo("Base de datos inaccesible", err=True)
 
 
-@cli.command()
+@cli.command(help="Exporta una tabla a CSV\n\nUso: docker-lens export-csv TABLE_NAME PATH [-o OUTPUT]")
 @click.argument("table_name")
 @click.option("-o", "--output", default=None)
 @click.argument("path")
@@ -125,10 +125,7 @@ def export_csv(table_name, output, path):
         click.echo("No fue posible realizar la exportacion", err=True)
 
 
-@cli.command()
-@click.option("-o", "--output", default=".", help="Directorio de salida")
-@click.argument("path")
-def export_all(output, path):
+@cli.command(help="Exporta todas las tablas a CSV\n\nUso: docker-lens export-all PATH [-o DIR]")
     
     if path == ".":
         path = os.getcwd()
@@ -157,7 +154,7 @@ def export_all(output, path):
         click.echo("No fue posible realizar la exportacion", err=True)
     
 
-@cli.command()
+@cli.command(help="Exporta la base de datos a SQLite\n\nUso: docker-lens export-sqlite PATH [-o OUTPUT]")
 @click.option("-o", "--output", default=None)
 @click.argument("path")
 def export_sqlite(output, path):
@@ -185,7 +182,7 @@ def export_sqlite(output, path):
 
 # Funciones de la interfaz:
 
-@cli.command(help="Muestra el comando para conectarte a la base de datos")
+@cli.command(help="Muestra el comando para conectarte a la base de datos\n\nUso: docker-lens connect PATH")
 @click.argument("path")
 def connect(path):
 
@@ -205,7 +202,7 @@ def connect(path):
 
     click.echo(result)
 
-@cli.command(help="Abre una sesión interactiva con la DB")
+@cli.command(help="Abre una sesión interactiva con la DB\n\nUso: docker-lens shell PATH")
 @click.argument("path")
 def shell(path):
 
@@ -225,7 +222,7 @@ def shell(path):
 
     subprocess.call(args, env=env)
 
-@cli.command(help="Muestra las primeras N filas de una tabla")
+@cli.command(help="Muestra las primeras N filas de una tabla\n\nUso: docker-lens head TABLE_NAME PATH [-n LIMIT]")
 @click.argument("table_name")
 @click.option("-n", "--limit", default=10, type=int, help="Cantidad de filas")
 @click.argument("path", required=True)
@@ -252,7 +249,7 @@ def head(table_name, limit,  path):
     click.echo(result)
 
 
-@cli.command(help="Muestra las últimas N filas de una tabla")
+@cli.command(help="Muestra las últimas N filas de una tabla\n\nUso: docker-lens tail TABLE_NAME PATH [-n LIMIT]")
 @click.argument("table_name")
 @click.option("-n", "--limit", default=10, type=int, help="Cantidad de filas")
 @click.argument("path", required=True)
@@ -279,7 +276,7 @@ def tail(table_name, limit,  path):
     click.echo(result)
 
 
-@cli.command(help="Muestra las columnas, tipos y constraints de una tabla")
+@cli.command(help="Muestra las columnas, tipos y constraints de una tabla\n\nUso: docker-lens schema TABLE_NAME PATH")
 @click.argument("table_name")
 @click.argument("path", required=True)
 def schema(table_name, path):
@@ -301,7 +298,7 @@ def schema(table_name, path):
 
     click.echo(result)
 
-@cli.command(help="Cuenta cantidad de filas en una tabla")
+@cli.command(help="Cuenta cantidad de filas en una tabla\n\nUso: docker-lens count TABLE_NAME PATH")
 @click.argument("table_name")
 @click.argument("path", required=True)
 def count(table_name, path):
@@ -323,7 +320,7 @@ def count(table_name, path):
 
     click.echo(result)
 
-@cli.command(help="Vacía una tabla (CASCADE si tiene dependencias)")
+@cli.command(help="Vacía una tabla (CASCADE si tiene dependencias)\n\nUso: docker-lens truncate TABLE_NAME PATH [--force]")
 @click.argument("table_name")
 @click.option("--force", is_flag=True, help="Saltar confirmacion")
 @click.argument("path", required=True)
@@ -349,7 +346,7 @@ def truncate(table_name, force, path):
 
     click.echo(result)
 
-@cli.command(help="Elimina una tabla (CASCADE si tiene dependencias)")
+@cli.command(help="Elimina una tabla (CASCADE si tiene dependencias)\n\nUso: docker-lens drop TABLE_NAME PATH [--force]")
 @click.argument("table_name")
 @click.option("--force", is_flag=True, help="Saltar confirmacion")
 @click.argument("path", required=True)
