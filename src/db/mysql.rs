@@ -1,11 +1,47 @@
-// MySQL/MariaDB adapter via mysql CLI.
-// Same pattern as postgres.rs but uses `mysql` binary.
-
 use std::io::{Error, ErrorKind};
 use std::process::Command;
 
-use crate::db::postgres;
+use crate::db::{extract_env, postgres};
 use crate::types::{GenericCredentials, TablaInfo};
+
+/// Extract MySQL/MariaDB credentials from a docker-compose service 
+pub fn extract_credentials(svc: &crate::compose::Service, db_type: crate::types::DbType) -> GenericCredentials {
+    let port = extract_env(svc, "MYSQL_PORT")
+        .or_else(|| extract_env(svc, "MARIADB_PORT"))
+        .unwrap_or_else(|| "3306".to_string());
+
+    let user = extract_env(svc, "MYSQL_USER")
+        .or_else(|| extract_env(svc, "MARIADB_USER"))
+        .or_else(|| {
+            if extract_env(svc, "MYSQL_ROOT_PASSWORD").is_some()
+                || extract_env(svc, "MARIADB_ROOT_PASSWORD").is_some()
+            {
+                Some("root".to_string())
+            } else {
+                None
+            }
+        })
+        .unwrap_or_else(|| "root".to_string());
+
+    let password = extract_env(svc, "MYSQL_PASSWORD")
+        .or_else(|| extract_env(svc, "MARIADB_PASSWORD"))
+        .or_else(|| extract_env(svc, "MYSQL_ROOT_PASSWORD"))
+        .or_else(|| extract_env(svc, "MARIADB_ROOT_PASSWORD"))
+        .unwrap_or_else(|| "root".to_string());
+
+    let database = extract_env(svc, "MYSQL_DATABASE")
+        .or_else(|| extract_env(svc, "MARIADB_DATABASE"))
+        .unwrap_or_else(|| "mysql".to_string());
+
+    GenericCredentials {
+        db_type,
+        host: String::from("localhost"),
+        port,
+        user,
+        password,
+        database,
+    }
+}
 
 
 /// List all tables via `SHOW TABLES`.
@@ -27,7 +63,7 @@ pub fn list_tables(credentials: &GenericCredentials) -> std::io::Result<String> 
     Ok(stdout)
 }
 
-/// Execute an arbitrary SQL query via mysql CLI.
+/// Execute an arbitrary SQL query via mysql CLI
 pub fn make_query(credentials: &GenericCredentials, query: &str) -> std::io::Result<String> {
     let mut cmd = build_mysql_command(credentials);
     cmd.arg("-e").arg(query);
@@ -43,7 +79,7 @@ pub fn make_query(credentials: &GenericCredentials, query: &str) -> std::io::Res
     Ok(stdout)
 }
 
-/// MySQL/MariaDB schema inspection via information_schema.columns.
+/// MySQL/MariaDB schema inspection via information_schema.columns
 pub fn inspect_schema_mysql(creds: &GenericCredentials) -> std::io::Result<Vec<TablaInfo>> {
     let tables_query = "SHOW TABLES;";
     let raw_tables = make_query(creds, tables_query)?;
@@ -84,7 +120,7 @@ pub fn inspect_schema_mysql(creds: &GenericCredentials) -> std::io::Result<Vec<T
 
 
 
-/// Export a table to CSV via mysql CLI --batch mode.
+/// Export a table to CSV via mysql CLI --batch mode
 pub fn export_csv(
     credentials: &GenericCredentials,
     table: &str,
@@ -109,7 +145,7 @@ pub fn export_csv(
     Ok(())
 }
 
-/// Build the base `mysql` Command with connection flags.
+/// Build the base `mysql` Command with connection flags
 fn build_mysql_command(credentials: &GenericCredentials) -> Command {
     let mut cmd = Command::new("mysql");
 
@@ -120,7 +156,7 @@ fn build_mysql_command(credentials: &GenericCredentials) -> Command {
         .arg("-u")
         .arg(&credentials.user);
 
-    // Pass password via env var instead of -p flag (avoids security warning)
+    // Pass password via env var instead of -p flag
     if !credentials.password.is_empty() {
         cmd.env("MYSQL_PWD", &credentials.password);
         // Skip the interactive password prompt
@@ -135,7 +171,7 @@ fn build_mysql_command(credentials: &GenericCredentials) -> Command {
 }
 
 
-/// Export MySQL/MariaDB to SQLite.
+/// Export MySQL/MariaDB to SQLite
 pub fn export_mysql_to_sqlite(creds: &GenericCredentials, sqlite_path: &str) -> std::io::Result<()> {
     let tables_query = "SHOW TABLES;";
     let raw_tables = make_query(creds, tables_query)?;

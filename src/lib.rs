@@ -9,21 +9,19 @@ mod heuristic;
 mod scanner;
 mod types;
 
-use crate::db::export_to_sqlite;
-use crate::heuristic::find_db_service;
+use crate::db::{credentials_from_compose, export_to_sqlite};
 use crate::scanner::find_container_orchestrator;
 use crate::types::{DbType, GenericCredentials};
 
 // Wrappers marca chapi, esta como peluda la libreria Py03
 
-/// Extract a required string key from a PyDict.
 fn extract_str(dict: &Bound<'_, PyDict>, key: &str) -> PyResult<String> {
     dict.get_item(key)?
         .ok_or_else(|| PyRuntimeError::new_err(format!("Missing key: {key}")))?
         .extract()
 }
 
-/// Build GenericCredentials from a Python dict.
+
 fn dict_to_creds(dict: &Bound<'_, PyDict>) -> PyResult<GenericCredentials> {
     let db_type_str: String = extract_str(dict, "db_type")?;
     let db_type = match db_type_str.as_str() {
@@ -56,7 +54,7 @@ fn find_orchestrator_py(file_path: String) -> PyResult<String> {
 #[pyfunction]
 fn find_db_py(py: Python<'_>, file_path: String) -> PyResult<Bound<'_, PyDict>> {
     let path = PathBuf::from(&file_path);
-    let creds = find_db_service(&path).map_err(|e| PyRuntimeError::new_err(format!("{}", e)))?;
+    let creds = credentials_from_compose(&path).map_err(|e| PyRuntimeError::new_err(format!("{}", e)))?;
 
     let db_type_str = match creds.db_type {
         DbType::Postgres => "postgres",

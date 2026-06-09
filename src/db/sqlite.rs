@@ -1,10 +1,42 @@
-// SQLite adapter via rusqlite (bundled).
-// Opens DB files directly — no container/network needed.
 use std::io::{Error, ErrorKind};
 
 use crate::types::{GenericCredentials, ColumnaInfo, TablaInfo};
 
-/// Open a SQLite connection from the database path stored in credentials.
+/// Extract SQLite credentials from a docker-compose service
+
+pub fn extract_credentials(svc: &crate::compose::Service) -> GenericCredentials {
+    // Try to find the DB path from volumes (first bind mount)
+    let database = if let Some(volumes) = &svc.volumes {
+        volumes
+            .iter()
+            .find_map(|v| {
+                let s = v.to_string();
+                // Bind mount format: "./data:/data" or "/host:/container"
+                if s.contains(':') {
+                    let host = s.split(':').next()?;
+                    // Skip pure named volumes
+                    if host.starts_with('/') || host.starts_with('.') {
+                        return Some(host.to_string());
+                    }
+                }
+                None
+            })
+            .unwrap_or_default()
+    } else {
+        String::new()
+    };
+
+    GenericCredentials {
+        db_type: crate::types::DbType::Sqlite,
+        host: String::new(),
+        port: String::new(),
+        user: String::new(),
+        password: String::new(),
+        database,
+    }
+}
+
+/// Open a SQLite connection from the database path stored in credentials
 pub fn open_db(creds: &GenericCredentials) -> std::io::Result<rusqlite::Connection> {
     rusqlite::Connection::open(&creds.database)
         .map_err(|e| Error::new(ErrorKind::Other, format!("SQLite open error: {}", e)))
@@ -30,7 +62,7 @@ pub fn list_tables(creds: &GenericCredentials) -> std::io::Result<String> {
     Ok(rows.join("\n"))
 }
 
-/// Execute an arbitrary SQL query against the SQLite database.
+/// Execute an arbitrary SQL query against the SQLite database
 pub fn make_query(creds: &GenericCredentials, query: &str) -> std::io::Result<String> {
     let conn = open_db(creds)?;
     let mut stmt = conn
@@ -77,7 +109,7 @@ pub fn make_query(creds: &GenericCredentials, query: &str) -> std::io::Result<St
 }
 
 
-/// SQLite schema inspection via PRAGMA table_info.
+/// SQLite schema inspection via PRAGMA table_info
 pub fn inspect_schema_sqlite(creds: &GenericCredentials) -> std::io::Result<Vec<TablaInfo>> {
     let conn = open_db(creds)?;
 

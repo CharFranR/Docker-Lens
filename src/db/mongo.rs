@@ -1,5 +1,3 @@
-// MongoDB adapter via mongodb crate (async).
-// Uses tokio runtime internally to bridge async → sync for the dispatch layer.
 use std::io::{Error, ErrorKind};
 
 use futures::StreamExt;
@@ -8,9 +6,30 @@ use mongodb::options::FindOptions;
 use mongodb::{Client, Collection};
 use serde_json::Value;
 
+use crate::db::extract_env;
 use crate::types::{GenericCredentials, TablaInfo, ColumnaInfo};
 
 const DEFAULT_PORT: &str = "27017";
+
+/// Extract MongoDB credentials from a docker-compose service.
+pub fn extract_credentials(svc: &crate::compose::Service) -> GenericCredentials {
+    let port = extract_env(svc, "MONGO_PORT").unwrap_or_else(|| DEFAULT_PORT.to_string());
+    let user = extract_env(svc, "MONGO_INITDB_ROOT_USERNAME")
+        .unwrap_or_else(|| "admin".to_string());
+    let password = extract_env(svc, "MONGO_INITDB_ROOT_PASSWORD")
+        .unwrap_or_else(|| "admin".to_string());
+    let database = extract_env(svc, "MONGO_INITDB_DATABASE")
+        .unwrap_or_else(|| "admin".to_string());
+
+    GenericCredentials {
+        db_type: crate::types::DbType::Mongo,
+        host: String::from("localhost"),
+        port,
+        user,
+        password,
+        database,
+    }
+}
 
 /// Build a MongoDB connection URI from credentials.
 fn build_uri(creds: &GenericCredentials) -> String {

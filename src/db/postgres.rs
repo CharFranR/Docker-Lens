@@ -5,9 +5,27 @@ use std::process::Command;
 
 use rusqlite::Connection;
 
+use crate::db::extract_env;
 use crate::types::{
     ColumnaInfo, GenericCredentials, SQLiteColumn, SQLiteSchema, SQLiteTable, TablaInfo,
 };
+
+/// Extract Postgres credentials from a docker-compose service.
+pub fn extract_credentials(svc: &crate::compose::Service) -> GenericCredentials {
+    let port = extract_env(svc, "POSTGRES_PORT").unwrap_or_else(|| "5432".to_string());
+    let user = extract_env(svc, "POSTGRES_USER").unwrap_or_else(|| "postgres".to_string());
+    let password = extract_env(svc, "POSTGRES_PASSWORD").unwrap_or_else(|| "postgres".to_string());
+    let database = extract_env(svc, "POSTGRES_DB").unwrap_or_else(|| "appdb".to_string());
+
+    GenericCredentials {
+        db_type: crate::types::DbType::Postgres,
+        host: String::from("localhost"),
+        port,
+        user,
+        password,
+        database,
+    }
+}
 
 
 /// List all tables via psql `\dt`.
