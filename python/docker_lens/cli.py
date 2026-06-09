@@ -126,7 +126,7 @@ def export_csv(table_name, output, path):
 
 
 @cli.command()
-@click.option("-o", "--output", default=None)
+@click.option("-o", "--output", default=".", help="Directorio de salida")
 @click.argument("path")
 def export_all(output, path):
     
@@ -145,13 +145,14 @@ def export_all(output, path):
     engine = get_engine(creds["db_type"])
     parsed_tables = engine.parse_tables(raw_tables)
 
+    os.makedirs(output, exist_ok=True)
+
     try:
         for table in parsed_tables:
+            file_path = os.path.join(output, f"{table}.csv")
+            docker_lens.export_csv_py(creds, table, file_path)
 
-            output = f"{table}.csv"
-            docker_lens.export_csv_py(creds, table, output)
-
-        click.echo("Exportado correctamente")
+        click.echo(f"Exportadas {len(parsed_tables)} tablas en {output}")
     except RuntimeError:
         click.echo("No fue posible realizar la exportacion", err=True)
     
