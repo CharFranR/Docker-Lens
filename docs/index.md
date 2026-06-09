@@ -5,7 +5,7 @@ title: Docker-Lens
 
 # Docker-Lens
 
-**Accedé a tu base de datos desde el terminal. Sin configuración, sin pain.**
+**Accedé a tu base de datos desde el terminal. Sin configuración, sin complicaciones.**
 
 Docker-Lens detecta automáticamente qué base de datos tenés en tu `docker-compose.yml` y te conecta al instante. PostgreSQL, MySQL, MariaDB, MongoDB, SQLite — un solo comando para todos.
 
