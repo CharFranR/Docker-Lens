@@ -167,9 +167,43 @@ pub fn make_query(creds: &GenericCredentials, query: &str) -> std::io::Result<St
             return docs_to_string(&results);
         }
 
+        // Handle delete (used by CLI truncate command)
+        if let Some(collection_name) = q.get("delete").and_then(|v| v.as_str()) {
+            let coll: Collection<Document> = db.collection(collection_name);
+            let deletes = q.get("deletes")
+                .and_then(|v| v.as_array())
+                .and_then(|arr| arr.first())
+                .cloned()
+                .unwrap_or(serde_json::json!({"q": {}, "limit": 0}));
+
+            let filter = deletes.get("q")
+                .and_then(|v| bson::to_document(v).ok())
+                .unwrap_or_else(|| doc! {});
+
+            let delete_result = coll
+                .delete_many(filter, None)
+                .await
+                .map_err(|e| Error::new(ErrorKind::Other, format!("MongoDB delete: {e}")))?;
+
+            return Ok(format!(
+                "Deleted {} document(s) from '{}'",
+                delete_result.deleted_count, collection_name
+            ));
+        }
+
+        // Handle drop (used by CLI drop command)
+        if let Some(collection_name) = q.get("drop").and_then(|v| v.as_str()) {
+            db.collection::<Document>(collection_name)
+                .drop(None)
+                .await
+                .map_err(|e| Error::new(ErrorKind::Other, format!("MongoDB drop: {e}")))?;
+
+            return Ok(format!("Dropped collection '{}'", collection_name));
+        }
+
         Err(Error::new(
             ErrorKind::InvalidInput,
-            "MongoDB query must have 'find', 'aggregate', or 'listCollections' field",
+            "MongoDB query must have 'find', 'aggregate', 'listCollections', 'delete', or 'drop' field",
         ))
     })
 }
