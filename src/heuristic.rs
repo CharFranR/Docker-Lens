@@ -319,13 +319,13 @@ pub fn find_db_service(folder_path: &PathBuf) -> std::io::Result<GenericCredenti
             DbType::Sqlite => ("", "", "", ""),
         };
 
-    // Extract port
+    // Extract port (host port, not container port)
     let mut port = String::from(default_port);
     if let Some(ports_vec) = &service.ports {
         if let Some(first) = ports_vec.first() {
-            let container_port = first.split('/').next().unwrap_or(first);
-            let parts: Vec<&str> = container_port.split(':').collect();
-            port = parts.last().unwrap_or(&default_port).to_string();
+            let host_port = first.split('/').next().unwrap_or(first);
+            let parts: Vec<&str> = host_port.split(':').collect();
+            port = parts.first().unwrap_or(&default_port).to_string();
         }
     }
 
