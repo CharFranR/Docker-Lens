@@ -12,20 +12,21 @@ use crate::types::{
 
 /// List all tables via psql `\dt`.
 pub fn list_tables(credentials: &GenericCredentials) -> std::io::Result<String> {
-    let port = String::from("-p") + &credentials.port;
-    let user = String::from("-U") + &credentials.user;
+    let host = format!("-h{}", credentials.host);
+    let port = format!("-p{}", credentials.port);
+    let user = format!("-U{}", credentials.user);
     let password = &credentials.password;
-    let db = String::from("-d") + &credentials.database;
+    let db = format!("-d{}", credentials.database);
 
     let output = Command::new("psql")
         .args([
-            "-hlocalhost",
-            port.as_str(),
-            user.as_str(),
-            db.as_str(),
+            &host,
+            &port,
+            &user,
+            &db,
             "-c",
             "\\dt",
-            "-w", // No pedir password
+            "-w",
         ])
         .env("PGPASSWORD", password.as_str())
         .output()?;
@@ -37,20 +38,21 @@ pub fn list_tables(credentials: &GenericCredentials) -> std::io::Result<String> 
 
 /// Execute an arbitrary SQL query via psql.
 pub fn make_query(credentials: &GenericCredentials, query: &str) -> std::io::Result<String> {
-    let port = String::from("-p") + &credentials.port;
-    let user = String::from("-U") + &credentials.user;
+    let host = format!("-h{}", credentials.host);
+    let port = format!("-p{}", credentials.port);
+    let user = format!("-U{}", credentials.user);
     let password = &credentials.password;
-    let db = String::from("-d") + &credentials.database;
+    let db = format!("-d{}", credentials.database);
 
     let response = Command::new("psql")
         .args([
-            "-hlocalhost",
-            port.as_str(),
-            user.as_str(),
-            db.as_str(),
+            &host,
+            &port,
+            &user,
+            &db,
             "-c",
             query,
-            "-w", // No pedir password
+            "-w",
         ])
         .env("PGPASSWORD", password.as_str())
         .output()?;
@@ -114,13 +116,14 @@ pub fn export_csv(
     file_path: &str,
 ) -> std::io::Result<()> {
     let file = std::fs::File::create(file_path)?;
+    let host = format!("-h{}", credentials.host);
     let port = format!("-p{}", credentials.port);
     let user = format!("-U{}", credentials.user);
     let db = format!("-d{}", credentials.database);
 
     let sql = format!("COPY (SELECT * FROM {table}) TO STDOUT WITH CSV HEADER");
     let mut child = Command::new("psql")
-        .args(["-hlocalhost", &port, &user, &db, "-c", &sql, "-w"])
+        .args([&host, &port, &user, &db, "-c", &sql, "-w"])
         .env("PGPASSWORD", &credentials.password)
         .stdout(file)
         .spawn()?;
