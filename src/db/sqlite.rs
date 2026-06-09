@@ -141,7 +141,6 @@ pub fn inspect_schema_sqlite(creds: &GenericCredentials) -> std::io::Result<Vec<
 pub fn export_csv(creds: &GenericCredentials, table: &str, file_path: &str) -> std::io::Result<()> {
     let conn = open_db(creds)?;
 
-    // Fetch all rows
     let query = format!("SELECT * FROM \"{table}\"");
     let mut stmt = conn
         .prepare(&query)
@@ -152,7 +151,15 @@ pub fn export_csv(creds: &GenericCredentials, table: &str, file_path: &str) -> s
         .map(|i| stmt.column_name(i).unwrap_or("?").to_string())
         .collect();
 
-    let rows_data: Vec<Vec<String>> = stmt
+    // Write CSV
+    let mut wtr = csv::Writer::from_path(file_path)
+        .map_err(|e| Error::new(ErrorKind::Other, format!("CSV writer: {}", e)))?;
+
+    wtr.write_record(&headers)
+        .map_err(|e| Error::new(ErrorKind::Other, format!("CSV headers: {}", e)))?;
+
+    // Stream rows directly to CSV — no full collection in memory
+    let mut rows = stmt
         .query_map([], |row| {
             let values: Vec<String> = (0..column_count)
                 .map(|i| {
@@ -163,19 +170,11 @@ pub fn export_csv(creds: &GenericCredentials, table: &str, file_path: &str) -> s
                 .collect();
             Ok(values)
         })
-        .map_err(|e| Error::new(ErrorKind::Other, format!("SQLite export query: {}", e)))?
-        .filter_map(|r| r.ok())
-        .collect();
+        .map_err(|e| Error::new(ErrorKind::Other, format!("SQLite export query: {}", e)))?;
 
-    // Write CSV
-    let mut wtr = csv::Writer::from_path(file_path)
-        .map_err(|e| Error::new(ErrorKind::Other, format!("CSV writer: {}", e)))?;
-
-    wtr.write_record(&headers)
-        .map_err(|e| Error::new(ErrorKind::Other, format!("CSV headers: {}", e)))?;
-
-    for row in &rows_data {
-        wtr.write_record(row)
+    while let Some(row) = rows.next() {
+        let row = row.map_err(|e| Error::new(ErrorKind::Other, format!("SQLite row: {}", e)))?;
+        wtr.write_record(&row)
             .map_err(|e| Error::new(ErrorKind::Other, format!("CSV row: {}", e)))?;
     }
 
