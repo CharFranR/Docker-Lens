@@ -4,11 +4,17 @@ build-backend = "maturin"
 
 [project]
 name = "dlens-py"
+description = "Accedé a tu base de datos desde el terminal. Detecta automáticamente PostgreSQL, MySQL, MariaDB, MongoDB y SQLite en docker-compose."
+readme = "README.md"
+license = "MIT"
 requires-python = ">=3.8"
 classifiers = [
     "Programming Language :: Rust",
     "Programming Language :: Python :: Implementation :: CPython",
     "Programming Language :: Python :: Implementation :: PyPy",
+    "Environment :: Console",
+    "Topic :: Database",
+    "Topic :: System :: Systems Administration",
 ]
 dynamic = ["version"]
 
