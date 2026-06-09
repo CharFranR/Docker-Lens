@@ -1,6 +1,7 @@
 // Multi-DB dispatch module.
 // Routes `list_tables`, `make_query`, `export_csv`, and `inspect_schema`
 // to engine-specific adapters based on `GenericCredentials.db_type`.
+pub mod docker;
 pub mod mongo;
 pub mod mysql;
 pub mod postgres;
@@ -44,8 +45,8 @@ pub fn export_csv(creds: &GenericCredentials, table: &str, path: &str) -> std::i
 /// Returns None for SQLite (file-based) and MongoDB (crate-based).
 pub fn get_container_ip(creds: &GenericCredentials, service_name: &str) -> Option<String> {
     match creds.db_type {
-        DbType::Postgres => postgres::get_container_ip(service_name),
-        DbType::Mysql | DbType::Mariadb => mysql::get_container_ip(service_name),
+        DbType::Postgres => docker::get_container_ip(service_name),
+        DbType::Mysql | DbType::Mariadb => docker::get_container_ip(service_name),
         DbType::Sqlite | DbType::Mongo => None,
     }
 }
