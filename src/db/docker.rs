@@ -1,52 +1,53 @@
+use std::io::{Error, ErrorKind};
 
-use std::process::Command;
+use bollard::Docker;
+use bollard::query_parameters::ListContainersOptionsBuilder;
+
+/// Connect to the local Docker daemon.
+fn connect() -> Result<Docker, Error> {
+    Docker::connect_with_local_defaults()
+        .map_err(|e| Error::new(ErrorKind::Other, format!("Docker connect: {e}")))
+}
 
 /// Resolve the Docker container IP for a given service name.
-pub fn get_container_ip(service_winner: &str) -> Option<String> {
-    let output = match Command::new("docker")
-        .args(["ps", "-a", "--format", "{{.ID}}|{{.Names}}"])
-        .output()
-    {
-        Ok(o) => o,
-        Err(_) => {
-            eprintln!("Error: Docker is not installed or not in PATH.");
-            return None;
-        }
-    };
+///
+/// Lists all containers, finds the one whose name contains `service_name`,
+/// and returns its IP address from the first network.
+pub fn get_container_ip(service_name: &str) -> Option<String> {
+    let rt = tokio::runtime::Runtime::new().ok()?;
+    let sn = service_name.to_string();
 
-    let output_str = String::from_utf8_lossy(&output.stdout);
+    rt.block_on(async {
+        let docker = connect().ok()?;
 
-    for line in output_str.lines() {
-        let parts: Vec<&str> = line.split('|').collect();
-        if parts.len() >= 2 {
-            let container_id = parts[0];
-            let container_name = parts[1];
-            let name_clean = container_name.trim_start_matches('/');
+        let containers = docker
+            .list_containers(Some(
+                ListContainersOptionsBuilder::default()
+                    .all(true)
+                    .build(),
+            ))
+            .await
+            .ok()?;
 
-            if name_clean.contains(service_winner) || container_name.contains(service_winner) {
-                let inspect_output = match Command::new("docker")
-                    .args([
-                        "inspect",
-                        container_id,
-                        "--format",
-                        "{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}",
-                    ])
-                    .output()
-                {
-                    Ok(o) => o,
-                    Err(_) => {
-                        eprintln!("Error: Could not inspect container '{}'.", container_name);
-                        return None;
-                    }
-                };
+        // Find the container whose name matches the service
+        let container = containers.iter().find(|c| {
+            c.names.as_ref().map_or(false, |names| {
+                names.iter().any(|name| {
+                    let clean = name.trim_start_matches('/');
+                    clean.contains(&sn)
+                })
+            })
+        })?;
 
-                let ip = String::from_utf8_lossy(&inspect_output.stdout)
-                    .trim()
-                    .to_string();
-                return Some(ip);
-            }
-        }
-    }
+        let id = container.id.as_deref()?;
 
-    None
+        // Inspect the container to get network settings
+        let inspect = docker.inspect_container(id, None).await.ok()?;
+
+        // Extract IP from the first network
+        let networks = inspect.network_settings?.networks?;
+        let (_name, settings) = networks.into_iter().next()?;
+
+        settings.ip_address
+    })
 }
