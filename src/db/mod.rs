@@ -76,7 +76,10 @@ pub fn export_csv(creds: &GenericCredentials, table: &str, path: &str) -> std::i
         DbType::Postgres => postgres::export_csv(creds, table, path),
         DbType::Mysql | DbType::Mariadb => mysql::export_csv(creds, table, path),
         DbType::Sqlite => sqlite::export_csv(creds, table, path),
-        DbType::Mongo => mongo::export_csv(creds, table, path),
+        DbType::Mongo => Err(std::io::Error::new(
+            std::io::ErrorKind::Unsupported,
+            "CSV export is not supported for MongoDB — use mongodump or mongoexport instead",
+        )),
     }
 }
 
@@ -108,7 +111,10 @@ pub fn export_to_sqlite(creds: &GenericCredentials, sqlite_path: &str) -> std::i
             ErrorKind::InvalidInput,
             "Source database is already SQLite — use file copy instead",
         )),
-        DbType::Mongo => mongo::export_mongo_to_sqlite(creds, sqlite_path),
+        DbType::Mongo => Err(Error::new(
+            ErrorKind::Unsupported,
+            "SQLite export is not supported for MongoDB — use mongodump or mongoexport instead",
+        )),
     }
 }
 

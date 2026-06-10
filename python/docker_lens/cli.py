@@ -125,6 +125,10 @@ def export_csv(table_name, output, path):
         click.echo("Base de datos inaccesible", err=True)
         return  
 
+    if creds["db_type"] == "mongo":
+        click.echo("CSV export is not supported for MongoDB — use mongodump or mongoexport instead", err=True)
+        return
+
     try:
         docker_lens.export_csv_py(creds, table_name, output)
         click.echo(f"Exportado correctamente en {output}")
@@ -133,9 +137,15 @@ def export_csv(table_name, output, path):
 
 
 @cli.command(help="Exporta todas las tablas a CSV\n\nUso: docker-lens export-all PATH [-o DIR]")
-    
+@click.argument("path")
+@click.option("-o", "--output", default=None)
+def export_all(path, output):
+
     if path == ".":
         path = os.getcwd()
+
+    if not output:
+        output = "export"
 
     try:
         base_path = docker_lens.find_orchestrator_py(path)
@@ -143,6 +153,10 @@ def export_csv(table_name, output, path):
     except RuntimeError:
         click.echo("Base de datos inaccesible", err=True)
         return  
+
+    if creds["db_type"] == "mongo":
+        click.echo("CSV export is not supported for MongoDB — use mongodump or mongoexport instead", err=True)
+        return
 
     raw_tables = docker_lens.list_tables_py(creds)
 
@@ -178,6 +192,10 @@ def export_sqlite(output, path):
     except RuntimeError:
         click.echo("Base de datos inaccesible", err=True)
         return  
+
+    if creds["db_type"] == "mongo":
+        click.echo("SQLite export is not supported for MongoDB — use mongodump or mongoexport instead", err=True)
+        return
 
     try:
         docker_lens.export_to_sqlite_py(creds, output)
