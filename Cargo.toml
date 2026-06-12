@@ -1,6 +1,6 @@
 [package]
 name = "docker_lens"
-version = "1.0.3"
+version = "1.0.4"
 edition = "2024"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
@@ -10,7 +10,7 @@ crate-type = ["cdylib"]
 
 
 [dependencies]
-pyo3 = "0.27.0"
+pyo3 = { version = "0.27.0", features = ["abi3-py38"] }
 bollard = "0.20"
 tokio = { version = "1", features = ["full"] }
 walkdir = "2"
