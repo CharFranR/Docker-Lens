@@ -7,6 +7,7 @@ name = "dlens-py"
 description = "Accedé a tu base de datos desde el terminal. Detecta automáticamente PostgreSQL, MySQL, MariaDB, MongoDB y SQLite en docker-compose."
 readme = "README.md"
 license = "MIT"
+dependencies = ["click"]
 requires-python = ">=3.8"
 classifiers = [
     "Programming Language :: Rust",
